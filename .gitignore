@@ -2,14 +2,24 @@
 .cursor/
 .codacy/
 
-# Flutter / Dart
-.dart_tool/
-.flutter-plugins
-.flutter-plugins-dependencies
-.pub-cache/
-.pub/
-/build/
-/coverage/
+# --- Backend (.NET) ---
+backend/**/bin/
+backend/**/obj/
+backend/.vs/
+backend/**/*.user
+backend/appsettings.json
+backend/appsettings.Development.json
+backend/appsettings.Secrets.json
+backend/package-lock.json
+
+# --- Mobile (Flutter) ---
+mobile/.dart_tool/
+mobile/.flutter-plugins
+mobile/.flutter-plugins-dependencies
+mobile/.pub-cache/
+mobile/.pub/
+mobile/build/
+mobile/coverage/
 
 # IDE
 .idea/
@@ -21,21 +31,25 @@
 Thumbs.db
 
 # Android / iOS build artifacts
-**/android/**/gradle-wrapper.jar
-**/android/.gradle/
-**/android/.kotlin/
-**/android/captures/
-**/android/local.properties
-**/ios/Pods/
-**/ios/.symlinks/
-**/ios/Flutter/Flutter.framework
-**/ios/Flutter/Flutter.podspec
+mobile/**/android/**/gradle-wrapper.jar
+mobile/**/android/.gradle/
+mobile/**/android/.kotlin/
+mobile/**/android/captures/
+mobile/**/android/local.properties
+mobile/**/ios/Pods/
+mobile/**/ios/.symlinks/
+mobile/**/ios/Flutter/Flutter.framework
+mobile/**/ios/Flutter/Flutter.podspec
 
 # Secrets
 .env
 .env.*
 *.keystore
 google-services.json
+
+# Legacy root build (trước khi chuyển vào mobile/)
+/build/
+.dart_tool/
 
 #Ignore cursor AI rules
 .cursor\rules\codacy.mdc
