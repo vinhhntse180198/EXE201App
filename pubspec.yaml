@@ -1,0 +1,30 @@
+name: prm393_test
+description: "Yume mobile — Flutter app kết nối API EXE201."
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.11.5
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+  http: ^1.6.0
+  shared_preferences: ^2.5.4
+  signalr_netcore: ^1.4.0
+  google_sign_in: ^6.3.0
+  file_picker: ^8.1.7
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/yume-logo.png
+    - assets/images/hero-japan.png
+    - assets/images/auth-register.png
+    - assets/images/play/

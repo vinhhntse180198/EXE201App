@@ -1,0 +1,41 @@
+# Cursor / Codacy
+.cursor/
+.codacy/
+
+# Flutter / Dart
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+/build/
+/coverage/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Android / iOS build artifacts
+**/android/**/gradle-wrapper.jar
+**/android/.gradle/
+**/android/.kotlin/
+**/android/captures/
+**/android/local.properties
+**/ios/Pods/
+**/ios/.symlinks/
+**/ios/Flutter/Flutter.framework
+**/ios/Flutter/Flutter.podspec
+
+# Secrets
+.env
+.env.*
+*.keystore
+google-services.json
+
+#Ignore cursor AI rules
+.cursor\rules\codacy.mdc
