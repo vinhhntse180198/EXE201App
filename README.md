@@ -4,8 +4,9 @@ Repo gồm **API backend** (.NET 8) và **app mobile** (Flutter), dùng chung h�
 
 ```
 EXE201App/
-├── backend/     # ASP.NET Core API — http://localhost:5056
-├── mobile/      # Flutter app
+├── backend/          # ASP.NET Core API — http://localhost:5056
+├── mobile/           # Flutter app
+├── scripts/          # Tiện ích DB / bài học (Supabase) — tùy chọn
 └── README.md
 ```
 
@@ -14,40 +15,34 @@ EXE201App/
 ### Cấu hình lần đầu
 
 ```powershell
-# Cách nhanh (từ thư mục gốc repo)
-.\run-backend.ps1
-
-# Hoặc tay:
 cd backend
-copy appsettings.Example.json appsettings.json
-copy appsettings.Example.json appsettings.Development.json
-# Sửa ConnectionStrings (SQL Server) trong hai file vừa tạo
+copy appsettings.Secrets.example.json appsettings.Secrets.json
+# Sửa ConnectionStrings:DefaultConnection → Supabase PostgreSQL (xem backend/SUPABASE-CAU-HINH.txt)
 dotnet restore
 dotnet run --launch-profile http
 ```
 
-API mặc định: **http://localhost:5056** (profile `http` trong `Properties/launchSettings.json`).
+API mặc định: **http://localhost:5056** (`Properties/launchSettings.json`, profile `http`).
 
-Database: chạy script trong `backend/doc/sql/` (DDL rồi seed).
+### Database (Supabase PostgreSQL)
 
-### SQL Server (gợi ý)
+1. Tạo project trên [Supabase](https://supabase.com).
+2. Chạy schema: `backend/doc/sql/yumegoji_supabase.sql`
+3. Seed dữ liệu (theo thứ tự trong `backend/doc/sql/yumegoji_supabase_data_v2_parts/00_README.txt`).
+4. Bổ sung bài N3 (nếu cần): `.\scripts\apply-n3-lessons.ps1` (cần `appsettings.Secrets.json`).
 
-- Server: `localhost`
-- Database: `YumegojiDB`
-- User/password: theo máy bạn (không commit mật khẩu thật lên Git).
+Script SQL Server cũ vẫn nằm trong `backend/doc/sql/` (DDL/seed) nếu team dùng SQL Server local.
+
+**Không commit** `appsettings.Secrets.json` (đã có trong `.gitignore`).
 
 ## 2. Mobile (Flutter)
 
-Flutter SDK (máy nhóm): `E:\FPT\PRM393\flutter_sdk\flutter`
+Cần [Flutter SDK](https://docs.flutter.dev/get-started/install) trong `PATH`.
 
 ```powershell
-# Cách nhanh (từ thư mục gốc repo)
-.\run-mobile.ps1
-
-# Hoặc tay:
 cd mobile
-E:\FPT\PRM393\flutter_sdk\flutter\bin\flutter.bat pub get
-E:\FPT\PRM393\flutter_sdk\flutter\bin\flutter.bat run
+flutter pub get
+flutter run
 ```
 
 | Thiết bị | API mặc định |
@@ -63,11 +58,22 @@ flutter run --dart-define=GOOGLE_SERVER_CLIENT_ID=xxx.apps.googleusercontent.com
 
 ## 3. Thứ tự chạy khi dev
 
-1. Bật SQL Server + import DB (nếu chưa có).
-2. `cd backend` → `dotnet run`.
+1. Cấu hình Supabase + `appsettings.Secrets.json`.
+2. `cd backend` → `dotnet run --launch-profile http`.
 3. `cd mobile` → `flutter run`.
 
-## 4. So với EXE201 Web
+## 4. Thư mục `scripts/` (tùy chọn)
+
+Dùng khi cần đồng bộ / kiểm tra dữ liệu bài học trên Supabase (không bắt buộc để chạy app):
+
+| Script | Mục đích |
+|--------|----------|
+| `sync-lessons-to-supabase.ps1` | Đồng bộ bảng lesson từ SQL mẫu |
+| `apply-n3-lessons.ps1` | Thêm / cập nhật bài học JLPT N3 |
+| `check-lessons.ps1` | Kiểm tra bài publish theo level |
+| `dump-lesson.ps1` | Xuất nội dung một bài (debug) |
+
+## 5. So với EXE201 Web
 
 - **Web**: frontend + backend (repo khác).
 - **Repo này**: backend API + **client Flutter** — API tương thích Web (cùng cổng 5056).
