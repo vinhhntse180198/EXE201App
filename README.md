@@ -6,24 +6,9 @@ Repo gồm **API backend** (.NET 8) và **app mobile** (Flutter), dùng chung h�
 EXE201App/
 ├── backend/          # ASP.NET Core API — http://localhost:5056
 ├── mobile/           # Flutter app
-├── docs/screenshots/ # Ảnh màn hình app (README)
 ├── scripts/          # Tiện ích DB / bài học (Supabase) — tùy chọn
 └── README.md
 ```
-
-## Giao diện app (screenshots)
-
-### Đăng nhập & Trang chủ
-
-| Trang chủ (khách) | Đăng nhập | Trang chủ (đã đăng nhập) |
-|:---:|:---:|:---:|
-| ![Trang chủ khách](docs/screenshots/01-trang-chu-khach.png) | ![Đăng nhập](docs/screenshots/02-dang-nhap.png) | ![Trang chủ](docs/screenshots/03-trang-chu.png) |
-
-### Các màn chính
-
-| Tổng quan | Học | Chat | Chơi (Game) |
-|:---:|:---:|:---:|:---:|
-| ![Tổng quan](docs/screenshots/04-tong-quan.png) | ![Học](docs/screenshots/05-hoc.png) | ![Chat](docs/screenshots/06-chat.png) | ![Chơi](docs/screenshots/07-choi.png) |
 
 ## 1. Backend
 
