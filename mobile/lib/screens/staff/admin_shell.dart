@@ -400,7 +400,7 @@ class _AdminShellState extends State<AdminShell> with SingleTickerProviderStateM
                       children: [
                         Text('Admin', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: _kurenaiDeep)),
                         SizedBox(height: 2),
-                        Text('YumeGo-ji Dashboard', style: TextStyle(fontSize: 12, color: Color(0xFF78716C))),
+                        Text('YumeGo-Ji Dashboard', style: TextStyle(fontSize: 12, color: Color(0xFF78716C))),
                       ],
                     ),
                   ),

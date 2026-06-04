@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../utils/yume_links.dart';
 
-/// Nội dung trang chủ — theo mẫu landing YumeGo-ji (mobile).
+/// Nội dung trang chủ — theo mẫu landing YumeGo-Ji (mobile).
 class HomepageContent {
-  static const brandName = 'YumeGo-ji';
+  static const brandName = 'YumeGo-Ji';
 
   static const heroTitle = 'Học tiếng Nhật';
   static const heroHighlight = 'Thật phong cách.';
@@ -67,7 +67,7 @@ class HomepageContent {
   ];
 
   static const testimonialsTitle = 'Cảm nhận học viên';
-  static const testimonialsSubtitle = 'Câu chuyện thành công từ cộng đồng YumeGo-ji.';
+  static const testimonialsSubtitle = 'Câu chuyện thành công từ cộng đồng YumeGo-Ji.';
 
   static const testimonials = <HomepageTestimonial>[
     HomepageTestimonial(
@@ -102,7 +102,7 @@ class HomepageContent {
     HomepageFooterLink('Quyền riêng tư'),
     HomepageFooterLink('Điều khoản'),
   ];
-  static const footerCopyright = '© 2026 YumeGo-ji Learning. Keep travelling.';
+  static const footerCopyright = '© 2026 YumeGo-Ji Learning. Keep travelling.';
 }
 
 class HomepageFooterLink {

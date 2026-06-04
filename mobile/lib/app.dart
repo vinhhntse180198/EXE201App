@@ -12,7 +12,7 @@ class YumeApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Yume',
+      title: 'YumeGo-Ji',
       debugShowCheckedModeBanner: false,
       locale: const Locale('vi', 'VN'),
       supportedLocales: const [

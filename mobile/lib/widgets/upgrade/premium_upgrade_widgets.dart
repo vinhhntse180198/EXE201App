@@ -96,7 +96,7 @@ class PremiumHeroBanner extends StatelessWidget {
                         const SizedBox(height: 4),
                         Text(
                           isPremium
-                              ? 'Tận hưởng đầy đủ tính năng YumeGo-ji.'
+                              ? 'Tận hưởng đầy đủ tính năng YumeGo-Ji.'
                               : 'Mở khóa học tập, game và cộng đồng không giới hạn.',
                           style: TextStyle(color: Colors.white.withValues(alpha: 0.92), fontSize: 13, height: 1.35),
                         ),

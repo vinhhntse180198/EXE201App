@@ -225,7 +225,7 @@ class _PlayShopScreenState extends State<PlayShopScreen> {
             _promoSection(),
             const SizedBox(height: 16),
             const Center(
-              child: Text('YumeGo-ji · Sakura Learning', style: TextStyle(color: YumeColors.muted, fontSize: 11)),
+              child: Text('YumeGo-Ji · Sakura Learning', style: TextStyle(color: YumeColors.muted, fontSize: 11)),
             ),
           ],
         ],

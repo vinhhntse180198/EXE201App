@@ -8,7 +8,7 @@ class YumeBrandMark extends StatelessWidget {
     super.key,
     this.size = 40,
     this.showTitle = true,
-    this.title = 'YumeGo-ji',
+    this.title = 'YumeGo-Ji',
     this.assetPath = 'assets/images/yume-logo.png',
   });
 

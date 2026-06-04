@@ -125,7 +125,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 const AuthHeroPanel(
                   compact: true,
                   imageAsset: 'assets/images/hero-japan.png',
-                  title: 'YumeGo-ji',
+                  title: 'YumeGo-Ji',
                   subtitle: 'Học tiếng Nhật qua bài học, game và chat.',
                 ),
                 const SizedBox(height: 20),

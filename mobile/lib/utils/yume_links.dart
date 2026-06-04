@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-/// Fanpage Facebook chính thức của YumeGo-ji.
+/// Fanpage Facebook chính thức của YumeGo-Ji.
 const kYumeFacebookUrl = 'https://www.facebook.com/people/Yumego-Ji/61589902962841/';
 
 Future<void> openYumeFacebookPage(BuildContext context) async {

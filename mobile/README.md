@@ -1,4 +1,4 @@
-# YumeGo-ji — Flutter mobile
+# YumeGo-Ji — Flutter mobile
 
 App mobile EXE201. Hướng dẫn chạy backend + monorepo: xem [README ở thư mục gốc](../README.md).
 

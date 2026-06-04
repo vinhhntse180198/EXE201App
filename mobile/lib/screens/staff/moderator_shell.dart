@@ -605,7 +605,7 @@ class _ModeratorShellState extends State<ModeratorShell> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('YumeGo-ji', style: TextStyle(color: Color(0xFFFFF7F7), fontWeight: FontWeight.w900, fontSize: 16)),
+                          Text('YumeGo-Ji', style: TextStyle(color: Color(0xFFFFF7F7), fontWeight: FontWeight.w900, fontSize: 16)),
                           SizedBox(height: 2),
                           Text('Moderator', style: TextStyle(color: Color(0x99FEF2F2), fontWeight: FontWeight.w800, fontSize: 11, letterSpacing: 1.1)),
                         ],
@@ -905,7 +905,6 @@ class _ModeratorShellState extends State<ModeratorShell> {
                               '—')
                           .trim();
                       final body = (jsonStr(msg, 'content') ?? jsonStr(msg, 'message') ?? '').trim();
-                      final msgType = jsonStr(msg, 'type');
                       final mid = jsonInt(msg, 'id') ?? jsonInt(msg, 'messageId');
                       return Container(
                         padding: const EdgeInsets.all(10),
@@ -919,7 +918,7 @@ class _ModeratorShellState extends State<ModeratorShell> {
                           children: [
                             Text('@$sender${mid != null ? ' · msg#$mid' : ''}', style: const TextStyle(fontWeight: FontWeight.w900)),
                             const SizedBox(height: 4),
-                            ChatMessageBody(content: body, messageType: msgType),
+                            Text(body.isEmpty ? '—' : body, style: const TextStyle(height: 1.35)),
                           ],
                         ),
                       );

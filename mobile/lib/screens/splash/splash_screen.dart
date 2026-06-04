@@ -110,7 +110,7 @@ class _SplashScreenState extends State<SplashScreen> {
               ),
               const SizedBox(height: 14),
               Text(
-                'YumeGo-ji',
+                'YumeGo-Ji',
                 style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
               ),
               const SizedBox(height: 26),
