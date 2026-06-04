@@ -51,6 +51,9 @@ google-services.json
 backend/wwwroot/uploads/*
 !backend/wwwroot/uploads/.gitkeep
 
+# APK build output (local)
+YumeGo-Ji*.apk
+
 # Legacy root build (trước khi chuyển vào mobile/)
 /build/
 .dart_tool/
