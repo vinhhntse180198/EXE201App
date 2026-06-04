@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../config/app_theme.dart';
+import '../../config/yume_colors.dart';
 import '../../core/session/app_session.dart';
 import '../../models/chat_room.dart';
 import '../../services/chat_service.dart';
@@ -64,15 +66,20 @@ class _CreateChatRoomSheetState extends State<CreateChatRoomSheet> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Text('Tạo phòng chat', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+          Text(
+            'Tạo phòng chat',
+            style: AppTheme.font(const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: YumeColors.ink)),
+          ),
           const SizedBox(height: 12),
           TextField(
             controller: _name,
+            style: AppTheme.font(const TextStyle(fontSize: 15, color: YumeColors.ink)),
             decoration: const InputDecoration(labelText: 'Tên phòng', border: OutlineInputBorder()),
           ),
           const SizedBox(height: 12),
           DropdownButtonFormField<String>(
             value: _type,
+            style: AppTheme.font(const TextStyle(fontSize: 15, color: YumeColors.ink)),
             decoration: const InputDecoration(labelText: 'Loại phòng', border: OutlineInputBorder()),
             items: const [
               DropdownMenuItem(value: 'group', child: Text('Nhóm')),
@@ -83,7 +90,7 @@ class _CreateChatRoomSheetState extends State<CreateChatRoomSheet> {
           ),
           if (_error != null) ...[
             const SizedBox(height: 8),
-            Text(_error!, style: const TextStyle(color: Colors.red, fontSize: 12)),
+            Text(_error!, style: AppTheme.font(const TextStyle(color: Colors.red, fontSize: 12))),
           ],
           const SizedBox(height: 16),
           FilledButton(

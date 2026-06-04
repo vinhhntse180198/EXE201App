@@ -9,11 +9,13 @@ class YumeBrandMark extends StatelessWidget {
     this.size = 40,
     this.showTitle = true,
     this.title = 'YumeGo-ji',
+    this.assetPath = 'assets/images/yume-logo.png',
   });
 
   final double size;
   final bool showTitle;
   final String title;
+  final String assetPath;
 
   @override
   Widget build(BuildContext context) {
@@ -40,12 +42,19 @@ class YumeBrandMark extends StatelessWidget {
             ],
           ),
           child: Center(
-            child: Text(
-              'ゆ',
-              style: TextStyle(
-                fontSize: size * 0.42,
-                fontWeight: FontWeight.w800,
-                color: const Color(0xFFBD0039),
+            child: Padding(
+              padding: EdgeInsets.all(size * 0.22),
+              child: Image.asset(
+                assetPath,
+                fit: BoxFit.contain,
+                errorBuilder: (_, __, ___) => Text(
+                  'ゆ',
+                  style: TextStyle(
+                    fontSize: size * 0.42,
+                    fontWeight: FontWeight.w800,
+                    color: const Color(0xFFBD0039),
+                  ),
+                ),
               ),
             ),
           ),

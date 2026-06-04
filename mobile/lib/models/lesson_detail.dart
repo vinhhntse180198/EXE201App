@@ -1,3 +1,5 @@
+import '../utils/json_field.dart';
+
 class VocabularyItem {
   const VocabularyItem({
     required this.id,
@@ -15,11 +17,11 @@ class VocabularyItem {
 
   factory VocabularyItem.fromJson(Map<String, dynamic> json) {
     return VocabularyItem(
-      id: json['id'] as int? ?? 0,
-      wordJp: json['wordJp'] as String? ?? '',
-      reading: json['reading'] as String?,
-      meaningVi: json['meaningVi'] as String?,
-      exampleSentence: json['exampleSentence'] as String?,
+      id: jsonInt(json, 'id') ?? 0,
+      wordJp: jsonStr(json, 'wordJp') ?? '',
+      reading: jsonStr(json, 'reading'),
+      meaningVi: jsonStr(json, 'meaningVi'),
+      exampleSentence: jsonStr(json, 'exampleSentence'),
     );
   }
 }
@@ -39,10 +41,10 @@ class KanjiItem {
 
   factory KanjiItem.fromJson(Map<String, dynamic> json) {
     return KanjiItem(
-      character: json['character'] as String? ?? '',
-      meaningVi: json['meaningVi'] as String?,
-      readingsOn: json['readingsOn'] as String?,
-      readingsKun: json['readingsKun'] as String?,
+      character: jsonStr(json, 'character') ?? jsonStr(json, 'kanjiChar') ?? '',
+      meaningVi: jsonStr(json, 'meaningVi'),
+      readingsOn: jsonStr(json, 'readingsOn'),
+      readingsKun: jsonStr(json, 'readingsKun'),
     );
   }
 }
@@ -62,10 +64,10 @@ class GrammarItem {
 
   factory GrammarItem.fromJson(Map<String, dynamic> json) {
     return GrammarItem(
-      pattern: json['pattern'] as String? ?? '',
-      meaningVi: json['meaningVi'] as String?,
-      structure: json['structure'] as String?,
-      exampleSentences: json['exampleSentences'] as String?,
+      pattern: jsonStr(json, 'pattern') ?? '',
+      meaningVi: jsonStr(json, 'meaningVi'),
+      structure: jsonStr(json, 'structure'),
+      exampleSentences: jsonStr(json, 'exampleSentences'),
     );
   }
 }
@@ -96,21 +98,23 @@ class LessonDetail {
   final List<GrammarItem> grammar;
 
   factory LessonDetail.fromApiJson(Map<String, dynamic> json) {
-    final lesson = json['lesson'] as Map<String, dynamic>? ?? json;
+    final lessonRaw = jsonField(json, 'lesson');
+    final lesson = lessonRaw is Map<String, dynamic> ? lessonRaw : json;
+
     List<T> mapList<T>(String key, T Function(Map<String, dynamic>) fromJson) {
-      final raw = json[key];
+      final raw = jsonField(json, key);
       if (raw is! List) return [];
       return raw.whereType<Map<String, dynamic>>().map(fromJson).toList();
     }
 
     return LessonDetail(
-      id: lesson['id'] as int? ?? 0,
-      title: lesson['title'] as String? ?? 'Bài học',
-      slug: lesson['slug'] as String? ?? '',
-      content: lesson['content'] as String?,
-      categoryName: lesson['categoryName'] as String?,
-      estimatedMinutes: lesson['estimatedMinutes'] as int? ?? 0,
-      isPremium: lesson['isPremium'] as bool? ?? false,
+      id: jsonInt(lesson, 'id') ?? 0,
+      title: jsonStr(lesson, 'title') ?? 'Bài học',
+      slug: jsonStr(lesson, 'slug') ?? '',
+      content: jsonStr(lesson, 'content'),
+      categoryName: jsonStr(lesson, 'categoryName'),
+      estimatedMinutes: jsonInt(lesson, 'estimatedMinutes') ?? 0,
+      isPremium: jsonBool(lesson, 'isPremium'),
       vocabulary: mapList('vocabulary', VocabularyItem.fromJson),
       kanji: mapList('kanji', KanjiItem.fromJson),
       grammar: mapList('grammar', GrammarItem.fromJson),

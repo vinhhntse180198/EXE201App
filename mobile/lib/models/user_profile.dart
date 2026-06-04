@@ -4,6 +4,10 @@ class UserProfile {
   const UserProfile({
     required this.userId,
     this.isPremium = false,
+    this.levelId,
+    this.levelCode,
+    this.exp = 0,
+    this.xu = 0,
     this.displayName,
     this.avatarUrl,
     this.coverUrl,
@@ -14,6 +18,10 @@ class UserProfile {
 
   final int userId;
   final bool isPremium;
+  final int? levelId;
+  final String? levelCode;
+  final int exp;
+  final int xu;
   final String? displayName;
   final String? avatarUrl;
   final String? coverUrl;
@@ -26,6 +34,10 @@ class UserProfile {
     return UserProfile(
       userId: jsonInt(json, 'userId') ?? jsonInt(json, 'id') ?? 0,
       isPremium: jsonBool(json, 'isPremium'),
+      levelId: jsonInt(json, 'levelId'),
+      levelCode: jsonStr(json, 'levelCode'),
+      exp: jsonInt(json, 'exp') ?? 0,
+      xu: jsonInt(json, 'xu') ?? 0,
       displayName: jsonStr(json, 'displayName'),
       avatarUrl: jsonStr(json, 'avatarUrl'),
       coverUrl: jsonStr(json, 'coverUrl'),
@@ -38,6 +50,10 @@ class UserProfile {
   UserProfile copyWith({
     int? userId,
     bool? isPremium,
+    int? levelId,
+    String? levelCode,
+    int? exp,
+    int? xu,
     String? displayName,
     String? avatarUrl,
     String? coverUrl,
@@ -48,6 +64,10 @@ class UserProfile {
     return UserProfile(
       userId: userId ?? this.userId,
       isPremium: isPremium ?? this.isPremium,
+      levelId: levelId ?? this.levelId,
+      levelCode: levelCode ?? this.levelCode,
+      exp: exp ?? this.exp,
+      xu: xu ?? this.xu,
       displayName: displayName ?? this.displayName,
       avatarUrl: avatarUrl ?? this.avatarUrl,
       coverUrl: coverUrl ?? this.coverUrl,

@@ -66,5 +66,9 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Yume cần truy cập thư viện ảnh để đặt ảnh đại diện, ảnh bìa và đăng bài.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Yume cần dùng camera để chụp ảnh đại diện hoặc đăng bài.</string>
 </dict>
 </plist>

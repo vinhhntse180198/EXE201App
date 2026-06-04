@@ -3,7 +3,8 @@ using System.Text.Json;
 using backend.DTOs.Game;
 using backend.Models.Learning;
 using Dapper;
-using Microsoft.Data.SqlClient;
+using Npgsql;
+using backend.Data;
 using Microsoft.EntityFrameworkCore;
 
 namespace backend.Services.Game;
@@ -20,7 +21,7 @@ public partial class GameService
     private async Task<StartSessionResponse?> TryStartCounterQuestFromLessonsAsync(
         int userId,
         StartSessionRequest req,
-        SqlConnection db)
+        NpgsqlConnection db)
     {
         var want = Math.Clamp(req.QuestionCount ?? 10, 5, 25);
 
@@ -51,7 +52,7 @@ public partial class GameService
         var tran = (IDbTransaction)tx;
         try
         {
-            var gameId = await db.ExecuteScalarAsync<int?>(
+            var gameId = await db.PgExecuteScalarAsync<int?>(
                 "SELECT id FROM dbo.games WHERE slug = @slug AND ISNULL(is_active, 1) = 1",
                 new { slug = "counter-quest" },
                 tran);
@@ -61,7 +62,7 @@ public partial class GameService
                 return null;
             }
 
-            var setId = await db.ExecuteScalarAsync<int?>(
+            var setId = await db.PgExecuteScalarAsync<int?>(
                 """
                 SELECT TOP 1 gqs.id
                 FROM dbo.game_question_sets gqs
@@ -76,7 +77,7 @@ public partial class GameService
                 return null;
             }
 
-            var maxHearts = await db.ExecuteScalarAsync<int>(
+            var maxHearts = await db.PgExecuteScalarAsync<int>(
                 "SELECT ISNULL(max_hearts, 3) FROM dbo.games WHERE id = @id",
                 new { id = gameId },
                 tran);
@@ -118,7 +119,7 @@ public partial class GameService
             var rows = new List<SpQuestionRow>();
             foreach (var qid in questionIds)
             {
-                var row = await db.QueryFirstOrDefaultAsync<SpQuestionRow>(
+                var row = await db.PgQueryFirstOrDefaultAsync<SpQuestionRow>(
                     """
                     SELECT id, question_type, question_text, hint_text, audio_url, image_url, options_json, base_score, difficulty
                     FROM dbo.game_questions WHERE id = @id
@@ -128,7 +129,7 @@ public partial class GameService
                     rows.Add(row);
             }
 
-            var tpq = await db.ExecuteScalarAsync<int?>(
+            var tpq = await db.PgExecuteScalarAsync<int?>(
                 "SELECT TOP 1 time_per_question_s FROM dbo.game_question_sets WHERE id = @id",
                 new { id = setId.Value });
 
@@ -287,13 +288,13 @@ public partial class GameService
     }
 
     private static async Task<int?> EnsureLessonCounterQuestionAsync(
-        SqlConnection db,
+        NpgsqlConnection db,
         IDbTransaction tran,
         int setId,
         LessonQuizQuestion q)
     {
         var hint = $"{LessonCounterHintPrefix}{q.Id}";
-        var existing = await db.ExecuteScalarAsync<int?>(
+        var existing = await db.PgExecuteScalarAsync<int?>(
             """
             SELECT TOP 1 id FROM dbo.game_questions
             WHERE set_id = @sid AND question_type = @qt AND hint_text = @hint

@@ -3,28 +3,16 @@ import 'package:flutter/services.dart';
 
 import '../../config/app_flags.dart';
 import '../../config/yume_colors.dart';
+import '../../config/yume_decorations.dart';
 import '../../core/session/app_session.dart';
 import '../../models/premium_models.dart';
 import '../../services/api_client.dart';
 import '../../services/payment_service.dart';
+import '../../utils/image_url.dart';
 import '../../widgets/common/error_view.dart';
 import '../../widgets/common/loading_view.dart';
-
-const _freeFeatures = [
-  'Bài học cơ bản theo cấp độ',
-  'Game giới hạn lượt',
-  'Chat công khai',
-  'Xem bảng xếp hạng',
-];
-
-const _premiumFeatures = [
-  'Không giới hạn lượt chơi',
-  'Tất cả bài học (kể cả nâng cao)',
-  'Không quảng cáo',
-  'Vật phẩm game mỗi ngày',
-  'Nhóm chat riêng & PvP',
-  'Huy hiệu Premium',
-];
+import '../../widgets/upgrade/premium_upgrade_widgets.dart';
+import '../../widgets/yume/yume_sakura_background.dart';
 
 class UpgradeScreen extends StatefulWidget {
   const UpgradeScreen({super.key});
@@ -98,7 +86,7 @@ class _UpgradeScreenState extends State<UpgradeScreen> {
       if (mounted) {
         setState(() {
           _intent = intent;
-          _message = 'Đã tạo mã thanh toán. Chuyển khoản đúng nội dung token.';
+          _message = 'Đã tạo mã thanh toán. Chuyển khoản đúng nội dung token bên dưới.';
         });
       }
     } catch (e) {
@@ -133,261 +121,314 @@ class _UpgradeScreenState extends State<UpgradeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_loading) {
+      return const Scaffold(body: LoadingView(message: 'Đang tải gói Premium...'));
+    }
+    if (_error != null && _config == null) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Nâng cấp Premium')),
+        body: ErrorView(message: _error!, onRetry: _load),
+      );
+    }
+
+    final cfg = _config;
+    final price = _fmtVnd(cfg?.premiumPriceVnd ?? 99000);
+    final days = cfg?.premiumDurationDays ?? 30;
+
     return Scaffold(
-      backgroundColor: YumeColors.surface,
-      appBar: AppBar(title: const Text('Nâng cấp Premium')),
-      body: _loading
-          ? const LoadingView(message: 'Đang tải gói Premium...')
-          : _error != null && _config == null
-              ? ErrorView(message: _error!, onRetry: _load)
-              : RefreshIndicator(
-                  onRefresh: _load,
-                  child: ListView(
-                    padding: const EdgeInsets.all(16),
+      extendBodyBehindAppBar: true,
+      appBar: AppBar(
+        backgroundColor: Colors.white.withValues(alpha: 0.72),
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        title: const Text(
+          'Nâng cấp Premium',
+          style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: YumeColors.ink),
+        ),
+      ),
+      body: YumeSakuraBackground(
+        child: DecoratedBox(
+          decoration: const BoxDecoration(gradient: YumeDecorations.dashboardGradient),
+          child: RefreshIndicator(
+            color: YumeColors.primary,
+            onRefresh: _load,
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(20, kToolbarHeight + 12, 20, 32),
+              children: [
+                PremiumHeroBanner(isPremium: _isPremium),
+                const SizedBox(height: 16),
+                YumeGlassCard(
+                  padding: const EdgeInsets.all(14),
+                  child: Row(
                     children: [
-                      const Text(
-                        'So sánh gói đăng ký',
-                        style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: YumeColors.ink),
-                      ),
-                      const SizedBox(height: 6),
-                      const Text(
-                        'Thanh toán chuyển khoản — admin duyệt sau khi xác nhận.',
-                        style: TextStyle(color: YumeColors.muted, fontSize: 13),
-                      ),
-                      if (_message != null) ...[
-                        const SizedBox(height: 12),
-                        Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFDCFCE7),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Text(_message!, style: TextStyle(color: Colors.green.shade900, fontSize: 13)),
+                      Icon(Icons.account_balance_outlined, size: 20, color: YumeColors.primary.withValues(alpha: 0.85)),
+                      const SizedBox(width: 10),
+                      const Expanded(
+                        child: Text(
+                          'Thanh toán chuyển khoản — admin duyệt sau khi xác nhận.',
+                          style: TextStyle(color: YumeColors.text, fontSize: 13, height: 1.4),
                         ),
-                      ],
-                      if (_error != null) ...[
-                        const SizedBox(height: 8),
-                        Text(_error!, style: const TextStyle(color: Colors.red, fontSize: 13)),
-                      ],
-                      const SizedBox(height: 16),
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(child: _planCard(
-                            title: 'Free',
-                            ribbon: 'Gói Miễn phí',
-                            price: 'Miễn phí',
-                            priceSub: '/ dùng lâu dài',
-                            features: _freeFeatures,
-                            isCurrent: !_isPremium,
-                            isPremiumCard: false,
-                            onUpgrade: null,
-                          )),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: _planCard(
-                              title: 'Premium',
-                              ribbon: 'Gói cao cấp',
-                              price: '${_fmtVnd(_config?.premiumPriceVnd ?? 10000)} đ',
-                              priceSub: '/ ${_config?.premiumDurationDays ?? 30} ngày',
-                              features: _premiumFeatures,
-                              isCurrent: _isPremium,
-                              isPremiumCard: true,
-                              onUpgrade: _isPremium || (_config?.isActive == false)
-                                  ? null
-                                  : (_creating ? null : _createIntent),
-                              buttonLabel: _isPremium
-                                  ? 'Gói hiện tại'
-                                  : (_creating ? 'Đang tạo mã…' : 'Nâng cấp Premium'),
-                            ),
-                          ),
-                        ],
                       ),
-                      if (!_isPremium && _intent != null) ...[
-                        const SizedBox(height: 24),
-                        _paymentSection(_config!, _intent!),
-                      ],
                     ],
                   ),
                 ),
-    );
-  }
-
-  Widget _planCard({
-    required String title,
-    required String ribbon,
-    required String price,
-    required String priceSub,
-    required List<String> features,
-    required bool isCurrent,
-    required bool isPremiumCard,
-    required VoidCallback? onUpgrade,
-    String buttonLabel = 'Chọn gói',
-  }) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: YumeColors.card,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: isCurrent ? YumeColors.primary : YumeColors.border,
-          width: isCurrent ? 2 : 1,
-        ),
-        boxShadow: [
-          if (isPremiumCard)
-            BoxShadow(color: YumeColors.primary.withValues(alpha: 0.12), blurRadius: 12, offset: const Offset(0, 4)),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-            decoration: BoxDecoration(
-              color: isPremiumCard ? const Color(0xFFFFF7ED) : YumeColors.pinkLight,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Text(
-              ribbon,
-              style: TextStyle(
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
-                color: isPremiumCard ? const Color(0xFFB45309) : YumeColors.primary,
-              ),
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(title, style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: isPremiumCard ? const Color(0xFFB45309) : YumeColors.ink)),
-          const SizedBox(height: 4),
-          RichText(
-            text: TextSpan(
-              style: const TextStyle(color: YumeColors.ink, fontSize: 15, fontWeight: FontWeight.w700),
-              children: [
-                TextSpan(text: price),
-                TextSpan(text: ' $priceSub', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: YumeColors.muted)),
+                if (_message != null) ...[
+                  const SizedBox(height: 12),
+                  _StatusBanner(text: _message!, ok: true),
+                ],
+                if (_error != null) ...[
+                  const SizedBox(height: 12),
+                  _StatusBanner(text: _error!, ok: false),
+                ],
+                const SizedBox(height: 20),
+                const Text(
+                  'So sánh gói đăng ký',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: YumeColors.ink),
+                ),
+                const SizedBox(height: 6),
+                const Text(
+                  'Chọn gói phù hợp — nâng cấp bất cứ lúc nào.',
+                  style: TextStyle(color: YumeColors.muted, fontSize: 13),
+                ),
+                const SizedBox(height: 18),
+                PremiumPlanCard(
+                  title: 'Premium',
+                  ribbon: 'Gói cao cấp',
+                  price: '$price đ',
+                  priceSub: '/ $days ngày',
+                  features: premiumFeatures,
+                  isPremiumStyle: true,
+                  isCurrent: _isPremium,
+                  recommended: !_isPremium,
+                  buttonLabel: _isPremium
+                      ? 'Gói hiện tại'
+                      : (_creating ? 'Đang tạo mã…' : 'Nâng cấp Premium'),
+                  onPressed: _isPremium || cfg?.isActive == false ? null : (_creating ? null : _createIntent),
+                ),
+                const SizedBox(height: 16),
+                PremiumPlanCard(
+                  title: 'Free',
+                  ribbon: 'Gói miễn phí',
+                  price: 'Miễn phí',
+                  priceSub: '/ dùng lâu dài',
+                  features: freeFeatures,
+                  isPremiumStyle: false,
+                  isCurrent: !_isPremium,
+                  buttonLabel: !_isPremium ? 'Gói hiện tại' : 'Chọn gói',
+                  onPressed: null,
+                ),
+                const SizedBox(height: 20),
+                const PremiumComparisonTable(),
+                if (!_isPremium && _intent != null && cfg != null) ...[
+                  const SizedBox(height: 20),
+                  _PaymentSection(
+                    cfg: cfg,
+                    intent: _intent!,
+                    fmtVnd: _fmtVnd,
+                    confirming: _confirming,
+                    onConfirm: _confirmPaid,
+                  ),
+                ],
               ],
             ),
           ),
-          const SizedBox(height: 10),
-          ...features.take(4).map(
-            (f) => Padding(
-              padding: const EdgeInsets.only(bottom: 4),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Icon(Icons.check_circle, size: 14, color: isPremiumCard ? const Color(0xFFD97706) : YumeColors.primary),
-                  const SizedBox(width: 6),
-                  Expanded(child: Text(f, style: const TextStyle(fontSize: 11, height: 1.25))),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 10),
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton(
-              onPressed: onUpgrade,
-              style: FilledButton.styleFrom(
-                backgroundColor: isPremiumCard ? const Color(0xFFD97706) : YumeColors.muted,
-                padding: const EdgeInsets.symmetric(vertical: 10),
-              ),
-              child: Text(buttonLabel, style: const TextStyle(fontSize: 12)),
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
+}
 
-  Widget _paymentSection(PremiumConfig cfg, PremiumIntent intent) {
+class _StatusBanner extends StatelessWidget {
+  const _StatusBanner({required this.text, required this.ok});
+
+  final String text;
+  final bool ok;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: ok ? const Color(0xFFDCFCE7) : const Color(0xFFFFE4E6),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: ok ? const Color(0xFF86EFAC) : YumeColors.pinkLight),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          color: ok ? const Color(0xFF166534) : YumeColors.primaryHover,
+          fontSize: 13,
+          height: 1.4,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+}
+
+class _PaymentSection extends StatelessWidget {
+  const _PaymentSection({
+    required this.cfg,
+    required this.intent,
+    required this.fmtVnd,
+    required this.confirming,
+    required this.onConfirm,
+  });
+
+  final PremiumConfig cfg;
+  final PremiumIntent intent;
+  final String Function(int) fmtVnd;
+  final bool confirming;
+  final VoidCallback onConfirm;
+
+  @override
+  Widget build(BuildContext context) {
     final bank = intent.bankCode.isNotEmpty ? intent.bankCode : cfg.bankCode;
     final acc = intent.accountNo.isNotEmpty ? intent.accountNo : cfg.accountNo;
     final name = intent.accountName.isNotEmpty ? intent.accountName : cfg.accountName;
     final amount = intent.amountVnd > 0 ? intent.amountVnd : cfg.premiumPriceVnd;
+    final qrUrl = buildImageUrl(intent.qrImageUrl);
 
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: YumeColors.card,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: YumeColors.border),
-      ),
+    return YumeGlassCard(
+      padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Thanh toán chuyển khoản', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
-          const SizedBox(height: 6),
-          Text(intent.statusLabel, style: const TextStyle(color: YumeColors.muted, fontSize: 13)),
-          const SizedBox(height: 16),
-          if (intent.qrImageUrl.isNotEmpty)
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: premiumGoldLight,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.qr_code_2_rounded, color: premiumGold, size: 22),
+              ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Text(
+                  'Thanh toán chuyển khoản',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: YumeColors.ink),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(intent.statusLabel, style: const TextStyle(color: YumeColors.muted, fontSize: 13, height: 1.35)),
+          if (qrUrl.isNotEmpty) ...[
+            const SizedBox(height: 18),
             Center(
               child: ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: Image.network(
-                  intent.qrImageUrl,
-                  height: 200,
-                  width: 200,
-                  fit: BoxFit.contain,
-                  errorBuilder: (_, __, ___) => Container(
-                    height: 200,
-                    width: 200,
-                    color: YumeColors.pinkLight,
-                    child: const Icon(Icons.qr_code_2, size: 80, color: YumeColors.primary),
+                borderRadius: BorderRadius.circular(16),
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    border: Border.all(color: YumeColors.border),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Image.network(
+                    qrUrl,
+                    height: 220,
+                    width: 220,
+                    fit: BoxFit.contain,
+                    errorBuilder: (_, __, ___) => Container(
+                      height: 220,
+                      width: 220,
+                      color: YumeColors.pinkLight,
+                      child: const Icon(Icons.qr_code_2, size: 80, color: YumeColors.primary),
+                    ),
                   ),
                 ),
               ),
             ),
-          const SizedBox(height: 16),
-          _infoRow('Ngân hàng', bank),
-          _infoRow('Số TK', acc),
-          _infoRow('Chủ TK', name),
-          _infoRow('Số tiền', '${_fmtVnd(amount)} VND'),
+          ],
+          const SizedBox(height: 18),
+          _InfoRow(label: 'Ngân hàng', value: bank),
+          _InfoRow(label: 'Số TK', value: acc),
+          _InfoRow(label: 'Chủ TK', value: name),
+          _InfoRow(label: 'Số tiền', value: '${fmtVnd(amount)} VND'),
+          const SizedBox(height: 10),
+          const Text('Nội dung chuyển khoản', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13, color: YumeColors.ink)),
           const SizedBox(height: 8),
-          const Text('Nội dung chuyển khoản:', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-          const SizedBox(height: 6),
           InkWell(
             onTap: () {
               Clipboard.setData(ClipboardData(text: intent.token));
               ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Đã copy token')));
             },
+            borderRadius: BorderRadius.circular(12),
             child: Container(
               width: double.infinity,
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: const Color(0xFFF1F5F9),
-                borderRadius: BorderRadius.circular(10),
+                color: const Color(0xFFF8FAFC),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: YumeColors.border),
               ),
               child: Row(
                 children: [
                   Expanded(
-                    child: Text(intent.token, style: const TextStyle(fontFamily: 'monospace', fontWeight: FontWeight.w700)),
+                    child: Text(
+                      intent.token,
+                      style: const TextStyle(fontFamily: 'monospace', fontWeight: FontWeight.w700, fontSize: 13),
+                    ),
                   ),
-                  const Icon(Icons.copy, size: 18, color: YumeColors.primary),
+                  const Icon(Icons.copy_rounded, size: 18, color: YumeColors.primary),
                 ],
               ),
             ),
           ),
-          const SizedBox(height: 16),
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton(
-              onPressed: _confirming ? null : _confirmPaid,
-              child: Text(_confirming ? 'Đang gửi…' : 'Tôi đã thanh toán'),
+          const SizedBox(height: 18),
+          Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: confirming ? null : onConfirm,
+              borderRadius: BorderRadius.circular(14),
+              child: Ink(
+                decoration: BoxDecoration(
+                  gradient: confirming ? null : YumeDecorations.playHeroGradient,
+                  color: confirming ? const Color(0xFFF1F5F9) : null,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  alignment: Alignment.center,
+                  child: Text(
+                    confirming ? 'Đang gửi…' : 'Tôi đã thanh toán',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 15,
+                      color: confirming ? YumeColors.muted : Colors.white,
+                    ),
+                  ),
+                ),
+              ),
             ),
           ),
         ],
       ),
     );
   }
+}
 
-  Widget _infoRow(String label, String value) {
+class _InfoRow extends StatelessWidget {
+  const _InfoRow({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.only(bottom: 8),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(width: 90, child: Text(label, style: const TextStyle(color: YumeColors.muted, fontSize: 13))),
-          Expanded(child: Text(value, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13))),
+          SizedBox(
+            width: 88,
+            child: Text(label, style: const TextStyle(color: YumeColors.muted, fontSize: 13)),
+          ),
+          Expanded(child: Text(value, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: YumeColors.ink))),
         ],
       ),
     );

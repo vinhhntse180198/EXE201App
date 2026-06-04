@@ -229,11 +229,6 @@ class _LoginScreenState extends State<LoginScreen> {
                                   ),
                           child: const Text('Chưa có tài khoản? Đăng ký'),
                         ),
-                        if (!widget.previewOnly && !designMode)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 8),
-                            child: Text('API: $apiBaseUrl', style: const TextStyle(fontSize: 10, color: YumeColors.muted)),
-                          ),
                       ],
                     ),
                   ),

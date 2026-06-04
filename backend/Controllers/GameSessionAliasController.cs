@@ -4,7 +4,8 @@ using backend.DTOs.Game;
 using backend.Services.Game;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Data.SqlClient;
+using Npgsql;
+using backend.Data;
 
 namespace backend.Controllers;
 
@@ -44,7 +45,7 @@ public class GameSessionAliasController : ControllerBase
             return StatusCode(StatusCodes.Status403Forbidden,
                 new GameApiError("SESSION_INVALID", "Session không thuộc tài khoản này."));
         }
-        catch (SqlException ex)
+        catch (PostgresException ex)
         {
             return StatusCode(StatusCodes.Status500InternalServerError,
                 new GameApiError("GAME_END_SQL", ex.Message));

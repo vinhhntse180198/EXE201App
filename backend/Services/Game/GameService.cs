@@ -3,7 +3,8 @@ using System.Text.Json;
 using backend.Data;
 using backend.DTOs.Game;
 using Dapper;
-using Microsoft.Data.SqlClient;
+using Npgsql;
+using backend.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -30,7 +31,7 @@ public partial class GameService : IGameService
         _learningDb = learningDb;
     }
 
-    private SqlConnection CreateConnection() => new(_connectionString);
+    private NpgsqlConnection CreateConnection() => new(_connectionString);
 
     private async Task<bool> IsUserPremiumAsync(int userId)
     {
@@ -66,39 +67,36 @@ public partial class GameService : IGameService
         setId is > 0 ? setId : null;
 
     /// <summary>Nếu user chưa có vật phẩm nào (tổng quantity = 0), cấp gói mở đầu để dùng power-up khi chơi.</summary>
-    private static async Task EnsureStarterInventoryIfEmptyAsync(SqlConnection db, int userId)
+    private static async Task EnsureStarterInventoryIfEmptyAsync(NpgsqlConnection db, int userId)
     {
         var sum = await db.ExecuteScalarAsync<int?>(
-            "SELECT SUM(quantity) FROM dbo.user_inventory WHERE user_id = @u",
+            "SELECT SUM(quantity) FROM user_inventory WHERE user_id = @u",
             new { u = userId }) ?? 0;
         if (sum > 0)
             return;
 
         /* Không cấp 50:50 miễn phí — tính năng gợi ý chưa mở; tránh hiển thị số túi gây nhầm. */
-        const string slugNorm = """
-            LOWER(REPLACE(REPLACE(LTRIM(RTRIM(p.slug)), N'_', N'-'), N' ', N''))
-            """;
+        const string slugNorm = "LOWER(REPLACE(REPLACE(TRIM(p.slug), '_', '-'), ' ', ''))";
 
         await db.ExecuteAsync(
             $"""
-            UPDATE i
-            SET i.quantity = @qty, i.updated_at = SYSUTCDATETIME()
-            FROM dbo.user_inventory i
-            INNER JOIN dbo.power_ups p ON p.id = i.power_up_id
-            WHERE i.user_id = @u
-              AND {slugNorm} <> N'fifty-fifty'
+            UPDATE user_inventory i
+            SET quantity = @qty, updated_at = (NOW() AT TIME ZONE 'utc')
+            FROM power_ups p
+            WHERE i.power_up_id = p.id AND i.user_id = @u
+              AND {slugNorm} <> 'fifty-fifty'
             """,
             new { u = userId, qty = StarterPowerUpQuantityPerType });
 
         await db.ExecuteAsync(
             $"""
-            INSERT INTO dbo.user_inventory (user_id, power_up_id, quantity, updated_at)
-            SELECT @u, p.id, @qty, SYSUTCDATETIME()
-            FROM dbo.power_ups p
-            WHERE ISNULL(p.is_active, 1) = 1
-              AND {slugNorm} <> N'fifty-fifty'
+            INSERT INTO user_inventory (user_id, power_up_id, quantity, updated_at)
+            SELECT @u, p.id, @qty, (NOW() AT TIME ZONE 'utc')
+            FROM power_ups p
+            WHERE COALESCE(p.is_active, true)
+              AND {slugNorm} <> 'fifty-fifty'
               AND NOT EXISTS (
-                  SELECT 1 FROM dbo.user_inventory i
+                  SELECT 1 FROM user_inventory i
                   WHERE i.user_id = @u AND i.power_up_id = p.id)
             """,
             new { u = userId, qty = StarterPowerUpQuantityPerType });
@@ -109,17 +107,18 @@ public partial class GameService : IGameService
         const string sql = """
             SELECT id AS Id, slug AS Slug, name AS Name, description AS Description,
                    skill_type AS SkillType, max_hearts AS MaxHearts,
-                   CAST(ISNULL(is_pvp, 0) AS BIT) AS IsPvp,
-                   CAST(ISNULL(is_boss_mode, 0) AS BIT) AS IsBossMode,
-                   ISNULL(sort_order, 0) AS SortOrder,
+                   COALESCE(is_pvp, false) AS IsPvp,
+                   COALESCE(is_boss_mode, false) AS IsBossMode,
+                   COALESCE(sort_order, 0) AS SortOrder,
                    level_min AS LevelMin,
                    level_max AS LevelMax
-            FROM dbo.games
-            WHERE ISNULL(is_active, 1) = 1
-              AND LOWER(LTRIM(RTRIM(slug))) NOT IN (N'fill-in-blank', N'fill-blank')
-            ORDER BY ISNULL(sort_order, 0), id
+            FROM games
+            WHERE COALESCE(is_active, true)
+              AND LOWER(TRIM(slug)) NOT IN ('fill-in-blank', 'fill-blank')
+            ORDER BY COALESCE(sort_order, 0), id
             """;
         using var db = CreateConnection();
+        await db.OpenAsync();
         var rows = await db.QueryAsync<GameInfoDto>(sql);
         return rows.ToList();
     }
@@ -128,17 +127,18 @@ public partial class GameService : IGameService
     {
         const string sql = """
             SELECT id AS Id, slug AS Slug, name AS Name, description AS Description,
-                   skill_type AS SkillType, ISNULL(max_hearts, 3) AS MaxHearts,
-                   CAST(ISNULL(is_pvp, 0) AS BIT) AS IsPvp,
-                   CAST(ISNULL(is_boss_mode, 0) AS BIT) AS IsBossMode,
-                   ISNULL(sort_order, 0) AS SortOrder,
+                   skill_type AS SkillType, COALESCE(max_hearts, 3) AS MaxHearts,
+                   COALESCE(is_pvp, false) AS IsPvp,
+                   COALESCE(is_boss_mode, false) AS IsBossMode,
+                   COALESCE(sort_order, 0) AS SortOrder,
                    level_min AS LevelMin,
                    level_max AS LevelMax
-            FROM dbo.games
-            WHERE ISNULL(is_active, 1) = 1
-            ORDER BY ISNULL(sort_order, 0), id
+            FROM games
+            WHERE COALESCE(is_active, true)
+            ORDER BY COALESCE(sort_order, 0), id
             """;
         using var db = CreateConnection();
+        await db.OpenAsync();
         var rows = await db.QueryAsync<GameInfoDto>(sql);
         return rows.ToList();
     }
@@ -155,17 +155,17 @@ public partial class GameService : IGameService
         using var db = CreateConnection();
         await db.OpenAsync();
         var exists = await db.ExecuteScalarAsync<int>(
-            "SELECT COUNT(1) FROM dbo.games WHERE LOWER(LTRIM(RTRIM(slug))) = @s",
+            "SELECT COUNT(1) FROM games WHERE LOWER(TRIM(slug)) = @s",
             new { s = slug });
         if (exists > 0)
             throw new InvalidOperationException("Slug game đã tồn tại.");
 
         var id = await db.ExecuteScalarAsync<int>(
             """
-            INSERT INTO dbo.games
+            INSERT INTO games
                 (slug, name, description, skill_type, max_hearts, is_pvp, is_boss_mode, sort_order, level_min, level_max, is_active)
-            OUTPUT INSERTED.id
-            VALUES (@slug, @name, @desc, @skill, @hearts, @pvp, @boss, @sort, @lmin, @lmax, 1)
+            VALUES (@slug, @name, @desc, @skill, @hearts, @pvp, @boss, @sort, @lmin, @lmax, true)
+            RETURNING id
             """,
             new
             {
@@ -198,7 +198,7 @@ public partial class GameService : IGameService
     public async Task<bool> DeleteGameAsync(int gameId)
     {
         using var db = CreateConnection();
-        var n = await db.ExecuteAsync(
+        var n = await db.PgExecuteAsync(
             "UPDATE dbo.games SET is_active = 0 WHERE id = @id AND ISNULL(is_active, 1) = 1",
             new { id = gameId });
         return n > 0;
@@ -222,7 +222,7 @@ public partial class GameService : IGameService
             if (!await IsUserPremiumAsync(userId))
             {
                 var today = DateTime.UtcNow.Date;
-                var cnt = await db.ExecuteScalarAsync<int>(
+                var cnt = await db.PgExecuteScalarAsync<int>(
                     """
                     SELECT COUNT(*) FROM dbo.game_sessions
                     WHERE user_id = @u AND started_at >= @dayStart
@@ -232,7 +232,7 @@ public partial class GameService : IGameService
                     throw new InvalidOperationException(
                         "Gói Miễn phí: đã đạt giới hạn lượt chơi trong ngày. Nâng cấp Premium để không giới hạn.");
 
-                var isPvp = await db.ExecuteScalarAsync<bool?>(
+                var isPvp = await db.PgExecuteScalarAsync<bool?>(
                     """
                     SELECT CAST(ISNULL(is_pvp, 0) AS BIT)
                     FROM dbo.games
@@ -306,35 +306,48 @@ public partial class GameService : IGameService
                 questionCountForSp = Math.Clamp(want, 5, 25);
             }
 
-            await using var multi = await db.QueryMultipleAsync(
-                "dbo.sp_StartGameSession",
+            var startRows = (await db.PgQueryAsync<SpStartPgRow>(
+                """
+                SELECT * FROM sp_start_game_session(@user_id, @game_slug, @set_id, @question_count)
+                """,
                 new
                 {
                     user_id = userId,
                     game_slug = gameSlug,
                     set_id = effectiveSetId,
                     question_count = questionCountForSp,
-                },
-                commandType: CommandType.StoredProcedure);
+                })).ToList();
 
-            var info = await multi.ReadFirstOrDefaultAsync<SpStartRow>();
-            if (info is null)
-                throw new InvalidOperationException("Không nhận được thông tin phiên từ sp_StartGameSession.");
+            if (startRows.Count == 0)
+                throw new InvalidOperationException("Không nhận được thông tin phiên từ sp_start_game_session.");
 
-            var questions = (await multi.ReadAsync<SpQuestionRow>()).ToList();
-
-            if (!string.Equals(req.Mode, "solo", StringComparison.OrdinalIgnoreCase))
+            var first = startRows[0];
+            var info = new SpStartRow
             {
-                await db.ExecuteAsync(
-                    "UPDATE dbo.game_sessions SET mode = @mode WHERE id = @id",
-                    new { mode = req.Mode, id = info.session_id });
-            }
+                session_id = first.session_id,
+                max_hearts = first.max_hearts,
+                set_id = first.set_id
+            };
 
-            var tpq = await db.ExecuteScalarAsync<int?>(
+            var questions = startRows.Select(r => new SpQuestionRow
+            {
+                id = r.q_id,
+                question_type = r.question_type,
+                question_text = r.question_text,
+                hint_text = r.hint_text,
+                audio_url = r.audio_url,
+                image_url = r.image_url,
+                options_json = r.options_json,
+                base_score = r.base_score,
+                difficulty = r.difficulty
+            }).ToList();
+
+            var tpq = await db.PgExecuteScalarAsync<int?>(
                 """
-                SELECT TOP (1) time_per_question_s
-                FROM dbo.game_question_sets
-                WHERE id = (SELECT set_id FROM dbo.game_sessions WHERE id = @sid)
+                SELECT time_per_question_s
+                FROM game_question_sets
+                WHERE id = (SELECT set_id FROM game_sessions WHERE id = @sid)
+                LIMIT 1
                 """,
                 new { sid = info.session_id });
 
@@ -353,7 +366,7 @@ public partial class GameService : IGameService
                     q.base_score,
                     q.difficulty)).ToList());
         }
-        catch (SqlException ex)
+        catch (PostgresException ex)
         {
             _logger.LogWarning(ex, "sp_StartGameSession failed for slug {Slug}", gameSlug);
             throw new InvalidOperationException(ex.Message, ex);
@@ -372,7 +385,7 @@ public partial class GameService : IGameService
         using var db = CreateConnection();
         await db.OpenAsync();
 
-        var sessionUserId = await db.ExecuteScalarAsync<int?>(
+        var sessionUserId = await db.PgExecuteScalarAsync<int?>(
             "SELECT user_id FROM dbo.game_sessions WHERE id = @id AND ended_at IS NULL",
             new { id = req.SessionId });
 
@@ -396,8 +409,10 @@ public partial class GameService : IGameService
         SpAnswerRow result;
         try
         {
-            result = await db.QueryFirstAsync<SpAnswerRow>(
-                "dbo.sp_SubmitAnswer",
+            result = await db.PgQueryFirstAsync<SpAnswerRow>(
+                """
+                SELECT * FROM sp_submit_answer(@session_id, @question_id, @question_order, @chosen_index, @response_ms, @power_up_used)
+                """,
                 new
                 {
                     session_id = req.SessionId,
@@ -406,10 +421,9 @@ public partial class GameService : IGameService
                     chosen_index = req.ChosenIndex,
                     response_ms = req.ResponseMs,
                     power_up_used = powerNorm
-                },
-                commandType: CommandType.StoredProcedure);
+                });
         }
-        catch (SqlException ex)
+        catch (PostgresException ex)
         {
             _logger.LogError(ex, "sp_SubmitAnswer failed for session {SessionId}", req.SessionId);
             throw;
@@ -427,11 +441,11 @@ public partial class GameService : IGameService
         var loseHeartOnWrong = !isCorrect && !string.Equals(usedPower, "skip", StringComparison.OrdinalIgnoreCase);
         var hearts = await GetHeartsRemainingAsync(db, req.SessionId, loseHeartOnWrong);
 
-        var explanation = await db.ExecuteScalarAsync<string?>(
+        var explanation = await db.PgExecuteScalarAsync<string?>(
             "SELECT explanation FROM dbo.game_questions WHERE id = @id",
             new { id = req.QuestionId });
 
-        var totalScore = await db.ExecuteScalarAsync<int?>(
+        var totalScore = await db.PgExecuteScalarAsync<int?>(
             "SELECT SUM(score_earned) FROM dbo.game_session_answers WHERE session_id = @id",
             new { id = req.SessionId }) ?? 0;
 
@@ -454,7 +468,7 @@ public partial class GameService : IGameService
         using var db = CreateConnection();
         await db.OpenAsync();
 
-        var sessionUserId = await db.ExecuteScalarAsync<int?>(
+        var sessionUserId = await db.PgExecuteScalarAsync<int?>(
             "SELECT user_id FROM dbo.game_sessions WHERE id = @id",
             new { id = sessionId });
         if (sessionUserId != userId)
@@ -479,7 +493,7 @@ public partial class GameService : IGameService
 
         using var db = CreateConnection();
         await db.OpenAsync();
-        var n = await db.ExecuteAsync(
+        var n = await db.PgExecuteAsync(
             "UPDATE dbo.users SET exp = exp + @e, xu = xu + @x WHERE id = @u",
             new { e = expReward, x = xuReward, u = userId });
         if (n != 1)
@@ -501,21 +515,21 @@ public partial class GameService : IGameService
     {
         const string sql = """
             SELECT p.id AS Id,
-                   REPLACE(REPLACE(LOWER(LTRIM(RTRIM(p.slug))), N'_', N'-'), N' ', N'') AS Slug,
+                   REPLACE(REPLACE(LOWER(TRIM(p.slug)), '_', '-'), ' ', '') AS Slug,
                    p.name AS Name, p.description AS Description,
                    p.effect_type AS EffectType,
                    p.xu_price AS XuPrice,
-                   CAST(ISNULL(p.is_premium, 0) AS BIT) AS IsPremium,
-                   ISNULL(i.quantity, 0) AS QuantityOwned
-            FROM dbo.power_ups p
-            LEFT JOIN dbo.user_inventory i ON i.power_up_id = p.id AND i.user_id = @uid
-            WHERE ISNULL(p.is_active, 1) = 1
-            ORDER BY ISNULL(p.sort_order, 0), p.id
+                   COALESCE(p.is_premium, false) AS IsPremium,
+                   COALESCE(i.quantity, 0) AS QuantityOwned
+            FROM power_ups p
+            LEFT JOIN user_inventory i ON i.power_up_id = p.id AND i.user_id = @uid
+            WHERE COALESCE(p.is_active, true)
+            ORDER BY COALESCE(p.sort_order, 0), p.id
             """;
         using var db = CreateConnection();
         await db.OpenAsync();
         await EnsureStarterInventoryIfEmptyAsync(db, userId);
-        var items = await db.QueryAsync<PowerUpDto>(sql, new { uid = userId });
+        var items = await db.PgQueryAsync<PowerUpDto>(sql, new { uid = userId });
         return new InventoryDto(items.ToList());
     }
 
@@ -534,12 +548,13 @@ public partial class GameService : IGameService
         using var tx = db.BeginTransaction();
         try
         {
-            var pu = await db.QueryFirstOrDefaultAsync<PurchasePowerUpRow>(
+            var pu = await db.PgQueryFirstOrDefaultAsync<PurchasePowerUpRow>(
                 """
-                SELECT TOP 1 id AS Id, xu_price AS XuPrice
-                FROM dbo.power_ups
-                WHERE ISNULL(is_active, 1) = 1
-                  AND REPLACE(REPLACE(LOWER(LTRIM(RTRIM(slug))), N'_', N'-'), N' ', N'') = @slug
+                SELECT id AS Id, xu_price AS XuPrice
+                FROM power_ups
+                WHERE COALESCE(is_active, true)
+                  AND REPLACE(REPLACE(LOWER(TRIM(slug)), '_', '-'), ' ', '') = @slug
+                LIMIT 1
                 """,
                 new { slug = norm },
                 tx);
@@ -551,7 +566,7 @@ public partial class GameService : IGameService
 
             var totalCost = pu.XuPrice.Value * qty;
 
-            var paid = await db.ExecuteAsync(
+            var paid = await db.PgExecuteAsync(
                 """
                 UPDATE dbo.users
                 SET xu = xu - @cost
@@ -562,7 +577,7 @@ public partial class GameService : IGameService
             if (paid != 1)
                 throw new InvalidOperationException("Không đủ xu để mua.");
 
-            var invUpd = await db.ExecuteAsync(
+            var invUpd = await db.PgExecuteAsync(
                 """
                 UPDATE dbo.user_inventory
                 SET quantity = quantity + @q, updated_at = SYSUTCDATETIME()
@@ -573,7 +588,7 @@ public partial class GameService : IGameService
 
             if (invUpd == 0)
             {
-                await db.ExecuteAsync(
+                await db.PgExecuteAsync(
                     """
                     INSERT INTO dbo.user_inventory (user_id, power_up_id, quantity, updated_at)
                     VALUES (@uid, @pid, @q, SYSUTCDATETIME())
@@ -582,11 +597,11 @@ public partial class GameService : IGameService
                     tx);
             }
 
-            var xuBalance = await db.ExecuteScalarAsync<int>(
+            var xuBalance = await db.PgExecuteScalarAsync<int>(
                 "SELECT xu FROM dbo.users WHERE id = @uid",
                 new { uid = userId },
                 tx);
-            var quantityOwned = await db.ExecuteScalarAsync<int>(
+            var quantityOwned = await db.PgExecuteScalarAsync<int>(
                 """
                 SELECT ISNULL(quantity, 0) FROM dbo.user_inventory
                 WHERE user_id = @uid AND power_up_id = @pid
@@ -609,7 +624,7 @@ public partial class GameService : IGameService
         using var db = CreateConnection();
         await db.OpenAsync();
 
-        var sessionUserId = await db.ExecuteScalarAsync<int?>(
+        var sessionUserId = await db.PgExecuteScalarAsync<int?>(
             "SELECT user_id FROM dbo.game_sessions WHERE id = @id AND ended_at IS NULL",
             new { id = req.SessionId });
         if (sessionUserId != userId)
@@ -625,7 +640,7 @@ public partial class GameService : IGameService
             if (req.QuestionId is null or < 1)
                 throw new ArgumentException("50:50 cần gửi questionId của câu hiện tại.");
 
-            var answered = await db.ExecuteScalarAsync<int>(
+            var answered = await db.PgExecuteScalarAsync<int>(
                 """
                 SELECT COUNT(1) FROM dbo.game_session_answers
                 WHERE session_id = @sid AND question_id = @qid
@@ -641,7 +656,7 @@ public partial class GameService : IGameService
                   ON gq.id = @qid AND gq.set_id = gs.set_id
                 WHERE gs.id = @sid AND gs.ended_at IS NULL
                 """;
-            var qRows = (await db.QueryAsync<(int correct_index, string? options_json)>(
+            var qRows = (await db.PgQueryAsync<(int correct_index, string? options_json)>(
                     qSql,
                     new { sid = req.SessionId, qid = req.QuestionId.Value }))
                 .ToList();
@@ -733,9 +748,9 @@ public partial class GameService : IGameService
 
         var orderSql = sortBy switch
         {
-            "accuracy" => "le.accuracy_avg DESC, le.score DESC",
-            "speed" => "CASE WHEN le.avg_duration_ms IS NULL THEN 1 ELSE 0 END, le.avg_duration_ms ASC, le.score DESC",
-            _ => "le.score DESC, le.accuracy_avg DESC"
+            "accuracy" => "le.accuracy_percent DESC NULLS LAST, le.score DESC",
+            "speed" => "le.avg_response_seconds ASC NULLS LAST, le.score DESC",
+            _ => "le.score DESC, le.accuracy_percent DESC NULLS LAST"
         };
 
         using var db = CreateConnection();
@@ -743,6 +758,15 @@ public partial class GameService : IGameService
 
         try
         {
+            var utcNow = DateTime.UtcNow;
+            var today = DateOnly.FromDateTime(utcNow);
+            var weekStart = GetUtcWeekStart(utcNow);
+            var monthStart = GetUtcMonthStart(utcNow);
+            if (period == "monthly")
+                await EnsureLeaderboardPeriodAsync(db, "monthly", monthStart, monthStart.AddMonths(1), null, null, "Tháng toàn hệ thống");
+            else
+                await EnsureLeaderboardPeriodAsync(db, "weekly", weekStart, weekStart.AddDays(7), null, null, "Tuần toàn hệ thống");
+
             IReadOnlyList<int> friendIds = Array.Empty<int>();
             if (friendsOnly)
             {
@@ -751,63 +775,67 @@ public partial class GameService : IGameService
 
                 const string friendsSql = """
                     SELECT DISTINCT CASE WHEN f.user_id = @me THEN f.friend_id ELSE f.user_id END AS fid
-                    FROM dbo.friendships f
+                    FROM friendships f
                     WHERE f.user_id = @me OR f.friend_id = @me
                     """;
-                friendIds = (await db.QueryAsync<int>(friendsSql, new { me = viewerUserId.Value })).ToList();
+                friendIds = (await db.PgQueryAsync<int>(friendsSql, new { me = viewerUserId.Value })).ToList();
                 if (friendIds.Count == 0)
                     return Array.Empty<LeaderboardEntryDto>();
             }
 
-            var levelClause = levelId.HasValue
-                ? "AND lp.level_id = @levelId"
-                : "AND lp.level_id IS NULL";
-
-            var friendClause = friendsOnly ? "AND le.user_id IN @friendIds" : "";
-
             gameSlug = string.IsNullOrWhiteSpace(gameSlug) ? null : NormalizeGameSlug(gameSlug);
 
+            string scopeClause;
+            if (levelId.HasValue)
+                scopeClause = "AND lp.scope = 'level' AND lp.level_id = @levelId";
+            else if (gameSlug != null)
+                scopeClause = "AND lp.scope = 'game' AND g.slug = @gameSlug";
+            else
+                scopeClause = "AND lp.scope = 'global' AND lp.game_id IS NULL AND lp.level_id IS NULL";
+
+            var friendClause = friendsOnly ? "AND le.user_id = ANY(@friendIds)" : "";
+
             var sql = $"""
-                SELECT TOP (100)
-                       0 AS Rank,
+                SELECT 0 AS Rank,
                        le.user_id AS UserId,
-                       ISNULL(NULLIF(LTRIM(RTRIM(up.display_name)), N''), u.username) AS DisplayName,
+                       COALESCE(NULLIF(TRIM(up.display_name), ''), u.username) AS DisplayName,
                        up.avatar_url AS AvatarUrl,
                        le.score AS Score,
-                       ISNULL(le.accuracy_avg, 0) AS AccuracyAvg,
-                       le.games_played AS GamesPlayed,
-                       le.best_combo AS BestCombo,
-                       le.avg_duration_ms AS AvgDurationMs,
+                       COALESCE(le.accuracy_percent, 0) AS AccuracyAvg,
+                       0 AS GamesPlayed,
+                       0 AS BestCombo,
+                       CASE WHEN le.avg_response_seconds IS NULL THEN NULL
+                            ELSE CAST(le.avg_response_seconds * 1000 AS INT) END AS AvgDurationMs,
                        lv.code AS LevelCode
-                FROM dbo.leaderboard_entries le
-                INNER JOIN dbo.leaderboard_periods lp ON lp.id = le.period_id
-                INNER JOIN dbo.users u ON u.id = le.user_id
-                LEFT JOIN dbo.user_profiles up ON up.user_id = le.user_id
-                LEFT JOIN dbo.levels lv ON lv.id = u.level_id
-                LEFT JOIN dbo.games g ON g.id = lp.game_id
-                WHERE lp.period_type = @period
-                  AND lp.starts_at <= @utcNow
-                  AND (lp.ends_at IS NULL OR lp.ends_at > @utcNow)
-                  AND ISNULL(LTRIM(RTRIM(LOWER(u.role))), N'user') = N'user'
-                  AND ISNULL(u.is_locked, 0) = 0
-                  AND LOWER(ISNULL(u.username, N'')) NOT LIKE N'admin%'
-                  AND LOWER(ISNULL(u.username, N'')) NOT LIKE N'staff%'
-                  AND LOWER(ISNULL(u.username, N'')) NOT LIKE N'moderator%'
-                  AND LOWER(ISNULL(u.username, N'')) NOT LIKE N'demo%'
-                  AND (@gameSlug IS NULL OR g.slug = @gameSlug)
-                  {levelClause}
+                FROM leaderboard_entries le
+                INNER JOIN leaderboard_periods lp ON lp.id = le.period_id
+                INNER JOIN users u ON u.id = le.user_id
+                LEFT JOIN user_profiles up ON up.user_id = le.user_id
+                LEFT JOIN levels lv ON lv.id = u.level_id
+                LEFT JOIN games g ON g.id = lp.game_id
+                WHERE lp.type = @period
+                  AND lp.period_start <= @today
+                  AND lp.period_end >= @today
+                  AND u.deleted_at IS NULL
+                  AND COALESCE(TRIM(LOWER(u.role)), 'user') = 'user'
+                  AND COALESCE(u.is_locked, false) = false
+                  AND LOWER(COALESCE(u.username, '')) NOT LIKE 'admin%'
+                  AND LOWER(COALESCE(u.username, '')) NOT LIKE 'staff%'
+                  AND LOWER(COALESCE(u.username, '')) NOT LIKE 'moderator%'
+                  AND LOWER(COALESCE(u.username, '')) NOT LIKE 'demo%'
+                  {scopeClause}
                   {friendClause}
                 ORDER BY {orderSql}
+                LIMIT 100
                 """;
 
-            var utcNow = DateTime.UtcNow;
-            var list = (await db.QueryAsync<LeaderboardEntryDto>(sql, new
+            var list = (await db.PgQueryAsync<LeaderboardEntryDto>(sql, new
             {
                 period,
                 gameSlug,
                 levelId,
-                friendIds,
-                utcNow
+                friendIds = friendIds.ToArray(),
+                today
             })).ToList();
 
             for (var i = 0; i < list.Count; i++)
@@ -837,7 +865,7 @@ public partial class GameService : IGameService
         try
         {
             using var db = CreateConnection();
-            var rows = await db.QueryAsync<AchievementDto>(sql, new { uid = userId });
+            var rows = await db.PgQueryAsync<AchievementDto>(sql, new { uid = userId });
             return rows.ToList();
         }
         catch (Exception ex)
@@ -851,29 +879,29 @@ public partial class GameService : IGameService
     {
         limit = Math.Clamp(limit, 1, 100);
         const string sql = """
-            SELECT TOP (@lim)
-                   0 AS Rank,
+            SELECT 0 AS Rank,
                    u.id AS UserId,
-                   ISNULL(NULLIF(LTRIM(RTRIM(up.display_name)), N''), u.username) AS DisplayName,
+                   COALESCE(NULLIF(TRIM(up.display_name), ''), u.username) AS DisplayName,
                    up.avatar_url AS AvatarUrl,
-                   ISNULL(u.exp, 0) AS Exp,
+                   COALESCE(u.exp, 0) AS Exp,
                    lv.code AS LevelCode
-            FROM dbo.users u
-            LEFT JOIN dbo.user_profiles up ON up.user_id = u.id
-            LEFT JOIN dbo.levels lv ON lv.id = u.level_id
+            FROM users u
+            LEFT JOIN user_profiles up ON up.user_id = u.id
+            LEFT JOIN levels lv ON lv.id = u.level_id
             WHERE u.deleted_at IS NULL
-              AND ISNULL(LTRIM(RTRIM(LOWER(u.role))), N'user') = N'user'
-              AND ISNULL(u.is_locked, 0) = 0
-              AND LOWER(ISNULL(u.username, N'')) NOT LIKE N'admin%'
-              AND LOWER(ISNULL(u.username, N'')) NOT LIKE N'staff%'
-              AND LOWER(ISNULL(u.username, N'')) NOT LIKE N'moderator%'
-              AND LOWER(ISNULL(u.username, N'')) NOT LIKE N'demo%'
-            ORDER BY ISNULL(u.exp, 0) DESC, u.id ASC
+              AND COALESCE(TRIM(LOWER(u.role)), 'user') = 'user'
+              AND COALESCE(u.is_locked, false) = false
+              AND LOWER(COALESCE(u.username, '')) NOT LIKE 'admin%'
+              AND LOWER(COALESCE(u.username, '')) NOT LIKE 'staff%'
+              AND LOWER(COALESCE(u.username, '')) NOT LIKE 'moderator%'
+              AND LOWER(COALESCE(u.username, '')) NOT LIKE 'demo%'
+            ORDER BY COALESCE(u.exp, 0) DESC, u.id ASC
+            LIMIT @lim
             """;
         try
         {
             using var db = CreateConnection();
-            var list = (await db.QueryAsync<ExpLeaderboardEntryDto>(sql, new { lim = limit })).ToList();
+            var list = (await db.PgQueryAsync<ExpLeaderboardEntryDto>(sql, new { lim = limit })).ToList();
             for (var i = 0; i < list.Count; i++)
                 list[i] = list[i] with { Rank = i + 1 };
             return list;
@@ -902,7 +930,7 @@ public partial class GameService : IGameService
         try
         {
             using var db = CreateConnection();
-            return await db.QueryFirstOrDefaultAsync<DailyChallengeDto>(sql, new { uid = userId, today });
+            return await db.PgQueryFirstOrDefaultAsync<DailyChallengeDto>(sql, new { uid = userId, today });
         }
         catch (Exception ex)
         {
@@ -917,7 +945,7 @@ public partial class GameService : IGameService
         await db.OpenAsync();
 
         var slug = NormalizeGameSlug(req.GameSlug);
-        var gameId = await db.ExecuteScalarAsync<int?>(
+        var gameId = await db.PgExecuteScalarAsync<int?>(
             "SELECT id FROM dbo.games WHERE slug = @slug AND ISNULL(is_active, 1) = 1",
             new { slug });
         if (gameId is null)
@@ -927,7 +955,7 @@ public partial class GameService : IGameService
 
         if (req.LevelId.HasValue)
         {
-            await db.ExecuteAsync(
+            await db.PgExecuteAsync(
                 """
                 INSERT INTO dbo.pvp_rooms (room_code, game_id, host_user_id, level_id, status)
                 VALUES (@code, @gid, @uid, @lid, N'waiting')
@@ -936,7 +964,7 @@ public partial class GameService : IGameService
         }
         else
         {
-            await db.ExecuteAsync(
+            await db.PgExecuteAsync(
                 """
                 INSERT INTO dbo.pvp_rooms (room_code, game_id, host_user_id, status)
                 VALUES (@code, @gid, @uid, N'waiting')
@@ -953,7 +981,7 @@ public partial class GameService : IGameService
         using var db = CreateConnection();
         await db.OpenAsync();
 
-        var roomId = await db.ExecuteScalarAsync<int?>(
+        var roomId = await db.PgExecuteScalarAsync<int?>(
             """
             SELECT id FROM dbo.pvp_rooms
             WHERE room_code = @code AND status = N'waiting' AND guest_user_id IS NULL
@@ -963,7 +991,7 @@ public partial class GameService : IGameService
         if (roomId is null)
             throw new InvalidOperationException("Phòng không tồn tại, đã đầy hoặc đã bắt đầu.");
 
-        await db.ExecuteAsync(
+        await db.PgExecuteAsync(
             """
             UPDATE dbo.pvp_rooms
             SET guest_user_id = @uid, status = N'active', started_at = SYSUTCDATETIME()
@@ -1008,13 +1036,13 @@ public partial class GameService : IGameService
             """;
 
         using var db = CreateConnection();
-        var rows = await db.QueryAsync<SessionSummaryDto>(sql, new { uid = userId, offset, size = pageSize });
+        var rows = await db.PgQueryAsync<SessionSummaryDto>(sql, new { uid = userId, offset, size = pageSize });
         return rows.ToList();
     }
 
-    private static async Task<SessionSummaryDto> FinalizeSessionAsync(GameService self, SqlConnection db, int sessionId)
+    private static async Task<SessionSummaryDto> FinalizeSessionAsync(GameService self, NpgsqlConnection db, int sessionId)
     {
-        var existing = await db.QueryFirstOrDefaultAsync<SpEndRow>(
+        var existing = await db.PgQueryFirstOrDefaultAsync<SpEndRow>(
             """
             SELECT score AS final_score, correct_count, total_questions,
                    CAST(CASE WHEN total_questions > 0 THEN (correct_count * 100.0 / total_questions) ELSE 0 END AS DECIMAL(5,2)) AS accuracy_percent,
@@ -1030,22 +1058,9 @@ public partial class GameService : IGameService
         if (existing is not null)
             return MapEndResult(sessionId, existing);
 
-        var result = await db.QueryFirstAsync<SpEndRow>(
-            "dbo.sp_EndGameSession",
-            new { session_id = sessionId },
-            commandType: CommandType.StoredProcedure);
-
-        /* Cột result có thể chưa có trên DB cũ — lỗi 207 sẽ làm hỏng cả kết thúc phiên. */
-        try
-        {
-            await db.ExecuteAsync(
-                "UPDATE dbo.game_sessions SET result = N'completed' WHERE id = @id AND result IS NULL",
-                new { id = sessionId });
-        }
-        catch (SqlException ex)
-        {
-            self._logger.LogWarning(ex, "Bỏ qua cập nhật game_sessions.result (thiếu cột hoặc lỗi SQL) session {SessionId}", sessionId);
-        }
+        var result = await db.PgQueryFirstAsync<SpEndRow>(
+            "SELECT * FROM sp_end_game_session(@session_id)",
+            new { session_id = sessionId });
 
         try
         {
@@ -1072,13 +1087,13 @@ public partial class GameService : IGameService
             r.xu_earned,
             "completed");
 
-    private static async Task<int> GetHeartsRemainingAsync(SqlConnection db, int sessionId, bool loseHeart)
+    private static async Task<int> GetHeartsRemainingAsync(NpgsqlConnection db, int sessionId, bool loseHeart)
     {
-        var session = await db.QueryFirstAsync<(int? hearts_remaining, int hearts_lost, int game_id)>(
+        var session = await db.PgQueryFirstAsync<(int? hearts_remaining, int hearts_lost, int game_id)>(
             "SELECT hearts_remaining, ISNULL(hearts_lost, 0), game_id FROM dbo.game_sessions WHERE id = @id",
             new { id = sessionId });
 
-        var maxHearts = await db.ExecuteScalarAsync<int>(
+        var maxHearts = await db.PgExecuteScalarAsync<int>(
             "SELECT ISNULL(max_hearts, 3) FROM dbo.games WHERE id = @id",
             new { id = session.game_id });
 
@@ -1088,7 +1103,7 @@ public partial class GameService : IGameService
         var current = session.hearts_remaining ?? maxHearts;
         var newVal = Math.Max(0, current - 1);
 
-        await db.ExecuteAsync(
+        await db.PgExecuteAsync(
             """
             UPDATE dbo.game_sessions
             SET hearts_remaining = @h,
@@ -1100,9 +1115,9 @@ public partial class GameService : IGameService
         return newVal;
     }
 
-    private static async Task RestoreOneHeartAsync(SqlConnection db, int sessionId)
+    private static async Task RestoreOneHeartAsync(NpgsqlConnection db, int sessionId)
     {
-        await db.ExecuteAsync(
+        await db.PgExecuteAsync(
             """
             UPDATE gs
             SET gs.hearts_remaining = CASE
@@ -1117,9 +1132,9 @@ public partial class GameService : IGameService
             new { sid = sessionId });
     }
 
-    private async Task DeductPowerUpAsync(SqlConnection db, int userId, string normalizedSlug, int sessionId)
+    private async Task DeductPowerUpAsync(NpgsqlConnection db, int userId, string normalizedSlug, int sessionId)
     {
-        var powerUpId = await db.ExecuteScalarAsync<int?>(
+        var powerUpId = await db.PgExecuteScalarAsync<int?>(
             """
             SELECT TOP 1 id FROM dbo.power_ups
             WHERE ISNULL(is_active, 1) = 1
@@ -1129,7 +1144,7 @@ public partial class GameService : IGameService
         if (powerUpId is null)
             throw new ArgumentException($"Power-up '{normalizedSlug}' không tồn tại.");
 
-        var qty = await db.ExecuteScalarAsync<int>(
+        var qty = await db.PgExecuteScalarAsync<int>(
             """
             SELECT ISNULL(
                 (SELECT quantity FROM dbo.user_inventory WHERE user_id = @uid AND power_up_id = @pid), 0)
@@ -1139,7 +1154,7 @@ public partial class GameService : IGameService
         if (qty <= 0)
             throw new InvalidOperationException($"Không đủ vật phẩm '{normalizedSlug}' trong túi đồ.");
 
-        await db.ExecuteAsync(
+        await db.PgExecuteAsync(
             """
             UPDATE dbo.user_inventory
             SET quantity = quantity - 1, updated_at = SYSUTCDATETIME()
@@ -1147,7 +1162,7 @@ public partial class GameService : IGameService
             """,
             new { uid = userId, pid = powerUpId });
 
-        await db.ExecuteAsync(
+        await db.PgExecuteAsync(
             """
             INSERT INTO dbo.game_session_powerups (session_id, power_up_id, used_at_order, used_at)
             SELECT @sid, @pid,
@@ -1157,9 +1172,9 @@ public partial class GameService : IGameService
             new { sid = sessionId, pid = powerUpId });
     }
 
-    private static async Task<PvpRoomDto?> GetPvpRoomByCodeAsync(SqlConnection db, string code)
+    private static async Task<PvpRoomDto?> GetPvpRoomByCodeAsync(NpgsqlConnection db, string code)
     {
-        return await db.QueryFirstOrDefaultAsync<PvpRoomDto>(
+        return await db.PgQueryFirstOrDefaultAsync<PvpRoomDto>(
             """
             SELECT r.id AS RoomId, r.room_code AS RoomCode, r.status AS Status,
                    r.host_user_id AS HostUserId,
@@ -1181,6 +1196,22 @@ public partial class GameService : IGameService
         public int session_id { get; set; }
         public int max_hearts { get; set; }
         public int? set_id { get; set; }
+    }
+
+    private sealed class SpStartPgRow
+    {
+        public int session_id { get; set; }
+        public int max_hearts { get; set; }
+        public int? set_id { get; set; }
+        public int q_id { get; set; }
+        public string question_type { get; set; } = null!;
+        public string? question_text { get; set; }
+        public string? hint_text { get; set; }
+        public string? audio_url { get; set; }
+        public string? image_url { get; set; }
+        public string? options_json { get; set; }
+        public int base_score { get; set; }
+        public int difficulty { get; set; }
     }
 
     private sealed class SpQuestionRow

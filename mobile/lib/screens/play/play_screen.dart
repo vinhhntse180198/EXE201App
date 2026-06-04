@@ -20,7 +20,6 @@ import 'play_guide_screen.dart';
 import 'play_shop_screen.dart';
 import '../../widgets/play/play_game_card.dart';
 import '../../widgets/play/play_hub_background.dart';
-import '../../widgets/play/play_hub_data_tabs.dart';
 import '../../widgets/play/play_leaderboard_panel.dart';
 
 class PlayScreen extends StatefulWidget {
@@ -31,7 +30,7 @@ class PlayScreen extends StatefulWidget {
 }
 
 class _PlayScreenState extends State<PlayScreen> with TickerProviderStateMixin {
-  late final TabController _tabs = TabController(length: 6, vsync: this);
+  late final TabController _tabs = TabController(length: 3, vsync: this);
   final _game = GameService(AppSession.instance.api);
   final _learn = LearnService(AppSession.instance.api);
 
@@ -258,9 +257,6 @@ class _PlayScreenState extends State<PlayScreen> with TickerProviderStateMixin {
               Tab(text: 'Game (${games.length})'),
               const Tab(text: 'Cửa hàng'),
               const Tab(text: 'BXH'),
-              const Tab(text: 'Thành tựu'),
-              const Tab(text: 'Hàng ngày'),
-              const Tab(text: 'Lịch sử'),
             ],
           ),
         ),
@@ -274,9 +270,6 @@ class _PlayScreenState extends State<PlayScreen> with TickerProviderStateMixin {
                 onBalanceChanged: _loadSummary,
               ),
               _leaderboardTab(),
-              const PlayAchievementsTab(),
-              PlayDailyTab(games: games, onPlayGame: _openGame),
-              const PlayHistoryTab(),
             ],
           ),
         ),

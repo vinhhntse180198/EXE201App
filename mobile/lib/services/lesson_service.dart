@@ -1,5 +1,6 @@
 import '../models/lesson_detail.dart';
 import '../models/lesson_item.dart';
+import '../utils/json_field.dart';
 import 'api_client.dart';
 
 class LessonService {
@@ -7,21 +8,35 @@ class LessonService {
 
   final ApiClient _api;
 
-  Future<List<LessonItem>> fetchLessons({int page = 1, int pageSize = 50}) async {
+  Future<LessonPageResult> fetchLessonsPage({int page = 1, int pageSize = 100, int? levelId}) async {
     final data = await _api.get(
       '/api/lessons',
-      query: {'page': '$page', 'pageSize': '$pageSize'},
+      query: {
+        'page': '$page',
+        'pageSize': '$pageSize',
+        if (levelId != null) 'levelId': '$levelId',
+      },
     );
-    if (data is Map<String, dynamic> && data['items'] is List) {
-      return (data['items'] as List)
-          .whereType<Map<String, dynamic>>()
-          .map(LessonItem.fromJson)
-          .toList();
+    final map = data is Map<String, dynamic> ? data : <String, dynamic>{};
+    final items = jsonApiMapList(map['items'] ?? data).map(LessonItem.fromJson).toList();
+    final total = jsonInt(map, 'totalCount') ?? items.length;
+    return LessonPageResult(items: items, totalCount: total);
+  }
+
+  /// Tải toàn bộ bài học (phân trang nếu server trả nhiều hơn pageSize).
+  Future<List<LessonItem>> fetchLessons({int pageSize = 100}) async {
+    final first = await fetchLessonsPage(page: 1, pageSize: pageSize);
+    if (first.items.length >= first.totalCount) return first.items;
+
+    final all = List<LessonItem>.from(first.items);
+    var page = 2;
+    while (all.length < first.totalCount) {
+      final next = await fetchLessonsPage(page: page, pageSize: pageSize);
+      if (next.items.isEmpty) break;
+      all.addAll(next.items);
+      page++;
     }
-    if (data is List) {
-      return data.whereType<Map<String, dynamic>>().map(LessonItem.fromJson).toList();
-    }
-    return [];
+    return all;
   }
 
   Future<LessonDetail> fetchBySlug(String slug) async {

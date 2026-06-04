@@ -50,7 +50,26 @@ class PlayLeaderboardList extends StatelessWidget {
     final rowCount = isExp ? expRows.length : gameRows.length;
 
     if (rowCount == 0) {
-      return const SizedBox.shrink();
+      return RefreshIndicator(
+        color: YumeColors.primary,
+        onRefresh: onRefresh,
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          children: const [
+            SizedBox(height: 48),
+            Icon(Icons.emoji_events_outlined, size: 48, color: YumeColors.muted),
+            SizedBox(height: 12),
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: 32),
+              child: Text(
+                'Chưa có dữ liệu BXH.\nChơi game để ghi điểm tuần/tháng, hoặc tích EXP để lên bảng EXP tổng.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: YumeColors.muted, height: 1.45, fontSize: 14),
+              ),
+            ),
+          ],
+        ),
+      );
     }
 
     return RefreshIndicator(

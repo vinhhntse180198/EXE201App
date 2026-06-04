@@ -1,6 +1,5 @@
 import 'dart:typed_data';
 
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
 import '../../config/app_flags.dart';
@@ -12,6 +11,8 @@ import '../../models/user_profile.dart';
 import '../../services/profile_service.dart';
 import '../../services/social_service.dart';
 import '../../utils/image_url.dart';
+import '../../utils/pick_image.dart';
+import '../../utils/yume_links.dart';
 import '../../widgets/common/error_view.dart';
 import '../../widgets/common/loading_view.dart';
 import '../../widgets/social/sakura_feed_widgets.dart';
@@ -106,12 +107,11 @@ class _CommunityScreenState extends State<CommunityScreen> {
   }
 
   Future<void> _pickPostImage() async {
-    final picked = await FilePicker.platform.pickFiles(type: FileType.image, withData: true);
-    final file = picked?.files.single;
-    if (file?.bytes == null) return;
+    final picked = await pickImageWithSheet(context);
+    if (picked == null) return;
     setState(() {
-      _postImageBytes = file!.bytes;
-      _postImageName = file.name;
+      _postImageBytes = picked.bytes;
+      _postImageName = picked.filename;
     });
   }
 
@@ -220,6 +220,11 @@ class _CommunityScreenState extends State<CommunityScreen> {
         foregroundColor: YumeColors.ink,
         elevation: 0,
         actions: [
+          IconButton(
+            icon: const Icon(Icons.facebook),
+            tooltip: 'Fanpage Facebook',
+            onPressed: () => openYumeFacebookPage(context),
+          ),
           if (!designMode)
             IconButton(icon: const Icon(Icons.refresh), onPressed: _loading ? null : _load),
         ],

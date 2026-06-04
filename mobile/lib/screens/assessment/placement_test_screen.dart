@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 
 import '../../config/app_flags.dart';
-import '../../config/yume_colors.dart';
 import '../../core/session/app_session.dart';
 import '../../models/auth_response.dart';
 import '../../services/assessment_service.dart';
+import '../../utils/jlpt_levels.dart';
 import '../../utils/post_login_nav.dart';
+import '../../widgets/assessment/exam_intro_panel.dart';
+import '../../widgets/assessment/exam_result_panel.dart';
 import '../../widgets/assessment/exam_runner.dart';
+import '../../widgets/assessment/exam_shell.dart';
 import '../../widgets/common/error_view.dart';
 import '../../widgets/common/loading_view.dart';
 
@@ -25,6 +28,7 @@ class _PlacementTestScreenState extends State<PlacementTestScreen> {
   String? _error;
   dynamic _test;
   dynamic _result;
+  bool _started = false;
 
   @override
   void initState() {
@@ -53,11 +57,14 @@ class _PlacementTestScreenState extends State<PlacementTestScreen> {
       await AppSession.instance.auth.setNeedsPlacementTest(false);
       final session = AppSession.instance.user;
       if (session != null) {
+        final newLevelId = levelIdFromCode(r.levelLabel) ?? session.user.levelId;
+        final updated = session.user.copyWith(levelId: newLevelId);
         AppSession.instance.applyAuth(AuthResponse(
           accessToken: session.accessToken,
-          user: session.user,
+          user: updated,
           needsPlacementTest: false,
         ));
+        await AppSession.instance.auth.updateCachedUser(updated, needsPlacementTest: false);
       }
       if (mounted) setState(() => _result = r);
     } catch (e) {
@@ -77,48 +84,59 @@ class _PlacementTestScreenState extends State<PlacementTestScreen> {
   Widget build(BuildContext context) {
     if (_result != null) {
       final r = _result;
-      return Scaffold(
-        appBar: AppBar(title: const Text('Kết quả Placement')),
-        body: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            children: [
-              const Icon(Icons.emoji_events, size: 64, color: YumeColors.primary),
-              const SizedBox(height: 16),
-              Text(
-                'Trình độ: ${r.levelLabel}',
-                style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
-              ),
-              Text('${r.correctCount}/${r.totalCount} câu đúng'),
-              const Spacer(),
-              FilledButton(onPressed: _goApp, child: const Text('Vào ứng dụng')),
-            ],
-          ),
-        ),
+      return ExamResultPanel(
+        title: 'Kết quả Placement',
+        headline: 'Trình độ: ${r.levelLabel}',
+        subtitle: 'Dựa trên kết quả bài kiểm tra đầu vào của bạn.',
+        badgeLabel: 'JLPT ${r.levelLabel}',
+        score: r.correctCount,
+        maxScore: r.totalCount,
+        detailLines: [
+          'Hoàn thành bài placement test.',
+          'Level ${r.levelLabel} sẽ được dùng để gợi ý lộ trình học.',
+        ],
+        primaryLabel: 'Vào ứng dụng',
+        onPrimary: _goApp,
+        onBack: _goApp,
       );
     }
 
-    if (_loading) return const Scaffold(body: LoadingView(message: 'Đang tải bài test...'));
+    if (_loading) {
+      return const ExamShell(body: LoadingView(message: 'Đang tải bài test...'));
+    }
     if (_error != null) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('Placement Test')),
+      return ExamShell(
+        appBar: examAppBar(title: 'Placement Test', onBack: () => Navigator.of(context).maybePop()),
         body: ErrorView(message: _error!, onRetry: _load),
       );
     }
 
     final t = _test!;
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Kiểm tra trình độ'),
-        automaticallyImplyLeading: false,
-      ),
-      body: ExamRunner(
-        title: 'Placement Test',
+    if (!_started) {
+      return ExamIntroPanel(
+        title: 'Bài kiểm tra đầu vào',
         subtitle: '${t.totalQuestions} câu · ${t.timeLimitSeconds ~/ 60} phút',
-        questions: t.questions,
-        timeLimitSeconds: t.timeLimitSeconds,
-        onSubmit: _submit,
-      ),
+        badgeLabel: 'Placement Test',
+        description: 'Làm bài trắc nghiệm để hệ thống gợi ý level JLPT phù hợp (N5 → N3).',
+        rules: const [
+          'Thời gian làm bài: 20 phút. Hết giờ sẽ tự nộp bài.',
+          '≤ 15 câu đúng → N5 · 16–30 câu → N4 · ≥ 31 câu → N3.',
+          'Chọn đáp án trước khi chuyển câu hoặc nộp bài.',
+          'Có thể lưu tạm và tiếp tục sau.',
+        ],
+        onBack: () => Navigator.of(context).maybePop(),
+        onStart: () => setState(() => _started = true),
+      );
+    }
+
+    return ExamRunner(
+      title: 'Placement Test',
+      subtitle: '${t.totalQuestions} câu · ${t.timeLimitSeconds ~/ 60} phút',
+      questions: t.questions,
+      timeLimitSeconds: t.timeLimitSeconds,
+      draftKey: 'yumegoji_placement_draft_v1',
+      onSubmit: _submit,
+      onExit: () => Navigator.of(context).maybePop(),
     );
   }
 }

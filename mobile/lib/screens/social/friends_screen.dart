@@ -4,6 +4,8 @@ import '../../config/yume_colors.dart';
 import '../../core/session/app_session.dart';
 import '../../models/friend_models.dart';
 import '../../services/social_service.dart';
+import '../../utils/image_url.dart';
+import '../../utils/yume_links.dart';
 import '../../widgets/common/loading_view.dart';
 
 /// Bạn bè & lời mời — khớp web social friends flows.
@@ -73,9 +75,9 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
         bottom: TabBar(
           controller: _tabs,
           tabs: [
-            Tab(text: 'Bạn (${_friends.length})'),
-            Tab(text: 'Đến (${_incoming.length})'),
-            Tab(text: 'Đi (${_outgoing.length})'),
+            Tab(text: 'Bạn bè (${_friends.length})'),
+            Tab(text: 'Lời đến (${_incoming.length})'),
+            Tab(text: 'Đã gửi (${_outgoing.length})'),
           ],
         ),
       ),
@@ -122,11 +124,22 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
                             ),
                           )),
                       const Divider(),
-                      ..._friends.map((u) => ListTile(
-                            leading: const CircleAvatar(child: Icon(Icons.person)),
-                            title: Text(u.label),
-                            subtitle: Text('@${u.username}'),
-                          )),
+                      ..._friends.map((u) {
+                        final avatarUrl = buildImageUrl(u.avatarUrl);
+                        final initial = u.label.isNotEmpty ? u.label[0].toUpperCase() : '?';
+                        return ListTile(
+                          leading: CircleAvatar(
+                            backgroundColor: YumeColors.pinkLight,
+                            backgroundImage: avatarUrl.isNotEmpty ? NetworkImage(avatarUrl) : null,
+                            onBackgroundImageError: (_, __) {},
+                            child: avatarUrl.isEmpty
+                                ? Text(initial, style: const TextStyle(color: YumeColors.primary, fontWeight: FontWeight.bold))
+                                : null,
+                          ),
+                          title: Text(u.label),
+                          subtitle: Text('@${u.username}'),
+                        );
+                      }),
                     ],
                   ),
                 ),
@@ -139,21 +152,41 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
 
   Widget _requestList(List<FriendRequest> items, {required bool incoming}) {
     if (items.isEmpty) {
-      return const Center(child: Text('Không có lời mời', style: TextStyle(color: YumeColors.muted)));
+      return Center(
+        child: Text(
+          incoming ? 'Không có lời mời đến' : 'Chưa gửi lời mời kết bạn',
+          style: const TextStyle(color: YumeColors.muted),
+        ),
+      );
     }
     return ListView.builder(
       itemCount: items.length,
       itemBuilder: (_, i) {
         final r = items[i];
         final other = incoming ? r.fromUser : r.toUser;
+        final avatarUrl = buildImageUrl(other.avatarUrl);
+        final initial = other.label.isNotEmpty ? other.label[0].toUpperCase() : '?';
         return ListTile(
+          leading: CircleAvatar(
+            backgroundColor: YumeColors.pinkLight,
+            backgroundImage: avatarUrl.isNotEmpty ? NetworkImage(avatarUrl) : null,
+            onBackgroundImageError: (_, __) {},
+            child: avatarUrl.isEmpty
+                ? Text(initial, style: const TextStyle(color: YumeColors.primary, fontWeight: FontWeight.bold))
+                : null,
+          ),
           title: Text(other.label),
-          subtitle: Text(r.status),
+          subtitle: Text(
+            incoming
+                ? friendRequestStatusLabel(r.status)
+                : 'Gửi tới @${other.username} · ${friendRequestStatusLabel(r.status)}',
+          ),
           trailing: incoming
               ? Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     IconButton(
+                      tooltip: 'Chấp nhận',
                       icon: const Icon(Icons.check, color: Colors.green),
                       onPressed: () async {
                         await _social.acceptFriendRequest(r.id);
@@ -161,6 +194,7 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
                       },
                     ),
                     IconButton(
+                      tooltip: 'Từ chối',
                       icon: const Icon(Icons.close, color: Colors.red),
                       onPressed: () async {
                         await _social.rejectFriendRequest(r.id);
@@ -170,9 +204,14 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
                   ],
                 )
               : IconButton(
+                  tooltip: 'Hủy lời mời',
                   icon: const Icon(Icons.cancel_outlined),
                   onPressed: () async {
                     await _social.cancelFriendRequest(r.id);
+                    if (!context.mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Đã hủy lời mời kết bạn')),
+                    );
                     await _reload();
                   },
                 ),

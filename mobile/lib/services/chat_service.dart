@@ -51,7 +51,8 @@ class ChatService {
       '/api/Chat/rooms/$roomId/messages',
       body: {'content': content},
     );
-    return ChatMessage.fromJson(data as Map<String, dynamic>);
+    final map = jsonApiMap(data) ?? (data as Map<String, dynamic>);
+    return ChatMessage.fromJson(map);
   }
 
   Future<void> joinRoom(int roomId) async {
@@ -72,6 +73,40 @@ class ChatService {
     };
     final data = await _api.get('/api/Chat/public-rooms', query: query);
     return jsonApiMapList(data).map(ChatRoom.fromJson).toList();
+  }
+
+  /// Members trong phòng; nếu là Moderator/Admin có thể bật includeOnline=true để có presence.
+  Future<List<dynamic>> fetchRoomMembers(int roomId, {int limit = 200, bool includeOnline = false}) async {
+    final data = await _api.get(
+      '/api/Chat/rooms/$roomId/members',
+      query: {
+        'limit': '${limit.clamp(1, 500)}',
+        if (includeOnline) 'includeOnline': 'true',
+      },
+    );
+    return data is List ? data : [];
+  }
+
+  /// Messages cursor-based (khớp web chatService.getRoomMessages).
+  /// Backend trả `{ items, nextCursor }` hoặc list tuỳ cấu hình.
+  Future<Map<String, dynamic>> fetchRoomMessagesCursor(
+    int roomId, {
+    String? cursor,
+    int limit = 30,
+  }) async {
+    final data = await _api.get(
+      '/api/Chat/rooms/$roomId/messages',
+      query: {
+        if (cursor != null && cursor.trim().isNotEmpty) 'cursor': cursor.trim(),
+        'limit': '${limit.clamp(1, 100)}',
+      },
+    );
+    return data is Map<String, dynamic> ? data : <String, dynamic>{'items': (data is List) ? data : <dynamic>[]};
+  }
+
+  /// Moderator/Admin xóa tin nhắn vi phạm (route `/moderate`).
+  Future<void> deleteMessageAsModerator(int roomId, int messageId) async {
+    await _api.delete('/api/Chat/rooms/$roomId/messages/$messageId/moderate');
   }
 
   /// Phòng JLPT đúng level học viên (N5→levelId 1, N4→2, …).
@@ -120,7 +155,8 @@ class ChatService {
       '/api/Chat/rooms/$roomId/messages/$messageId/reactions',
       body: {'emoji': emoji},
     );
-    return ChatMessage.fromJson(data as Map<String, dynamic>);
+    final map = jsonApiMap(data) ?? (data as Map<String, dynamic>);
+    return ChatMessage.fromJson(map);
   }
 
   Future<void> removeReaction(int roomId, int messageId, String emoji) async {

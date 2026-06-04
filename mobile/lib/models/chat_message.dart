@@ -1,3 +1,5 @@
+import '../utils/json_field.dart';
+
 class ChatReaction {
   const ChatReaction({required this.emoji, required this.count, this.reactedByMe = false});
 
@@ -7,9 +9,9 @@ class ChatReaction {
 
   factory ChatReaction.fromJson(Map<String, dynamic> json) {
     return ChatReaction(
-      emoji: json['emoji'] as String? ?? '👍',
-      count: json['count'] as int? ?? 1,
-      reactedByMe: json['reactedByMe'] as bool? ?? json['ReactedByMe'] as bool? ?? false,
+      emoji: jsonStr(json, 'emoji') ?? '👍',
+      count: jsonInt(json, 'count') ?? 1,
+      reactedByMe: jsonBool(json, 'reactedByMe'),
     );
   }
 }
@@ -21,6 +23,7 @@ class ChatMessage {
     required this.senderName,
     required this.content,
     required this.sentAt,
+    this.messageType = 'text',
     this.reactions = const [],
   });
 
@@ -28,25 +31,43 @@ class ChatMessage {
   final int senderId;
   final String senderName;
   final String content;
+  final String messageType;
   final DateTime? sentAt;
   final List<ChatReaction> reactions;
 
   factory ChatMessage.fromJson(Map<String, dynamic> json) {
+    final map = _unwrapMessageMap(json);
+
     DateTime? sent;
-    final raw = json['sentAt'] ?? json['createdAt'];
+    final raw = jsonField(map, 'sentAt') ?? jsonField(map, 'createdAt');
     if (raw is String) sent = DateTime.tryParse(raw);
 
-    final rx = json['reactions'] ?? json['Reactions'];
+    final rx = jsonField(map, 'reactions');
     return ChatMessage(
-      id: json['id'] as int? ?? 0,
-      senderId: json['senderId'] as int? ?? json['userId'] as int? ?? 0,
-      senderName: json['senderName'] as String? ?? json['username'] as String? ?? 'User',
-      content: json['content'] as String? ?? json['body'] as String? ?? '',
+      id: jsonInt(map, 'id') ?? 0,
+      senderId: jsonInt(map, 'userId') ?? jsonInt(map, 'senderId') ?? 0,
+      senderName: _resolveSenderName(map),
+      content: jsonStr(map, 'content') ?? jsonStr(map, 'body') ?? '',
+      messageType: jsonStr(map, 'type') ?? 'text',
       sentAt: sent,
       reactions: rx is List
-          ? rx.whereType<Map<String, dynamic>>().map(ChatReaction.fromJson).toList()
+          ? rx.whereType<Map>().map((e) => ChatReaction.fromJson(Map<String, dynamic>.from(e))).toList()
           : [],
     );
+  }
+
+  static Map<String, dynamic> _unwrapMessageMap(Map<String, dynamic> json) {
+    final wrapped = jsonField(json, 'message');
+    if (wrapped is Map) return Map<String, dynamic>.from(wrapped);
+    return json;
+  }
+
+  static String _resolveSenderName(Map<String, dynamic> json) {
+    for (final key in ['senderDisplayName', 'senderUsername', 'senderName', 'username', 'displayName']) {
+      final v = jsonStr(json, key);
+      if (v != null && v.trim().isNotEmpty) return v.trim();
+    }
+    return 'Học viên';
   }
 
   ChatMessage copyWith({List<ChatReaction>? reactions}) {
@@ -55,6 +76,7 @@ class ChatMessage {
       senderId: senderId,
       senderName: senderName,
       content: content,
+      messageType: messageType,
       sentAt: sentAt,
       reactions: reactions ?? this.reactions,
     );

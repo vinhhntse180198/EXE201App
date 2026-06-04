@@ -34,8 +34,10 @@ class _MainShellState extends State<MainShell> with LearnerPlacementGuard {
   @override
   void initState() {
     super.initState();
-    PresenceService.instance.start();
-    guardPlacementOnTab();
+    if (AppSession.instance.isLoggedIn) {
+      PresenceService.instance.start();
+      guardPlacementOnTab();
+    }
   }
 
   @override
@@ -45,8 +47,15 @@ class _MainShellState extends State<MainShell> with LearnerPlacementGuard {
   }
 
   void _switchTab(int i) {
+    // Guest mode: chỉ cho phép xem Trang chủ. Các tab khác yêu cầu đăng nhập.
+    if (!AppSession.instance.isLoggedIn && i != 0) {
+      Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const LoginScreen()));
+      return;
+    }
     setState(() => _index = i);
-    guardPlacementOnTab();
+    if (AppSession.instance.isLoggedIn) {
+      guardPlacementOnTab();
+    }
   }
 
   late final List<Widget> _pages = [
@@ -71,6 +80,7 @@ class _MainShellState extends State<MainShell> with LearnerPlacementGuard {
   Widget build(BuildContext context) {
     final user = AppSession.instance.user?.user;
     final tabLabel = YumeBottomNav.items[_index].label;
+    final loggedIn = AppSession.instance.isLoggedIn;
 
     return Scaffold(
       backgroundColor: const Color(0xFFFFFBFE),
@@ -79,11 +89,51 @@ class _MainShellState extends State<MainShell> with LearnerPlacementGuard {
           children: [
             _learnerAppBar(user, tabLabel),
             const SystemAnnouncementBanner(),
-            Expanded(child: IndexedStack(index: _index, children: _pages)),
+            Expanded(
+              child: loggedIn
+                  ? IndexedStack(index: _index, children: _pages)
+                  : IndexedStack(
+                      index: 0,
+                      children: [
+                        _pages[0],
+                        for (var i = 1; i < _pages.length; i++) _guestLockedTab(),
+                      ],
+                    ),
+            ),
           ],
         ),
       ),
-      bottomNavigationBar: YumeBottomNav(currentIndex: _index, onTap: _switchTab),
+      bottomNavigationBar: YumeBottomNav(
+        currentIndex: loggedIn ? _index : 0,
+        onTap: _switchTab,
+      ),
+    );
+  }
+
+  Widget _guestLockedTab() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.lock_outline, size: 48, color: YumeColors.primary),
+            const SizedBox(height: 12),
+            const Text('Cần đăng nhập', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
+            const SizedBox(height: 8),
+            const Text(
+              'Bạn đang ở chế độ khách. Hãy đăng nhập để sử dụng tính năng này.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: YumeColors.muted),
+            ),
+            const SizedBox(height: 14),
+            FilledButton(
+              onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const LoginScreen())),
+              child: const Text('Đăng nhập'),
+            ),
+          ],
+        ),
+      ),
     );
   }
 

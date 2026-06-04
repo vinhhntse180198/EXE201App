@@ -80,12 +80,24 @@ class AuthService {
     await prefs.setBool(_needsPlacementKey, value);
   }
 
+  /// Cập nhật user trong cache (vd. sau placement test gán level).
+  Future<void> updateCachedUser(User user, {bool? needsPlacementTest}) async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString(_tokenKey);
+    if (token == null || token.isEmpty) return;
+    await _persist(AuthResponse(
+      accessToken: token,
+      user: user,
+      needsPlacementTest: needsPlacementTest ?? prefs.getBool(_needsPlacementKey) ?? false,
+    ));
+  }
+
   Future<void> _persist(AuthResponse auth) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_tokenKey, auth.accessToken);
     await prefs.setString(
       _userJsonKey,
-      '${auth.user.id}|${auth.user.username}|${auth.user.email}|${auth.user.role}|${auth.user.exp}|${auth.user.xu}|${auth.user.isPremium}',
+      '${auth.user.id}|${auth.user.username}|${auth.user.email}|${auth.user.role}|${auth.user.exp}|${auth.user.xu}|${auth.user.isPremium}|${auth.user.levelId ?? ''}',
     );
     await prefs.setBool(_needsPlacementKey, auth.needsPlacementTest);
   }
@@ -124,6 +136,7 @@ class AuthService {
         exp: parts.length > 4 ? int.tryParse(parts[4]) ?? 0 : 0,
         xu: parts.length > 5 ? int.tryParse(parts[5]) ?? 0 : 0,
         isPremium: parts.length > 6 && parts[6] == 'true',
+        levelId: parts.length > 7 && parts[7].trim().isNotEmpty ? int.tryParse(parts[7].trim()) : null,
       ),
       needsPlacementTest: needsPlacement,
     );

@@ -28,6 +28,9 @@ namespace backend
     {
         public static void Main(string[] args)
         {
+            // Supabase/PostgreSQL: cột timestamp (không time zone) — tương thích DateTime UTC từ code SQL Server cũ
+            AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
+
             var builder = WebApplication.CreateBuilder(args);
             // OpenAI ApiKey: đặt trong appsettings.Secrets.json (đã .gitignore) hoặc User Secrets — xem OPENAI-CAU-HINH.txt
             builder.Configuration.AddJsonFile("appsettings.Secrets.json", optional: true, reloadOnChange: true);
@@ -38,15 +41,17 @@ namespace backend
                 o.Limits.MaxRequestBodySize = 32_000_000;
             });
 
-            // SQL Server – YUMEGO-JI (bật retry khi lỗi kết nối tạm thời)
+            // PostgreSQL / Supabase – YUMEGO-JI
             builder.Services.AddDbContext<ApplicationDbContext>(options =>
             {
                 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
-                options.UseSqlServer(connectionString, sql =>
+                options.UseNpgsql(connectionString, npgsql =>
                 {
-                    sql.EnableRetryOnFailure();
+                    npgsql.EnableRetryOnFailure();
                 });
             });
+
+            builder.Services.AddMemoryCache();
 
             // YUMEGO-JI: Đăng ký 10 mô-đun theo đặc tả hệ thống
             builder.Services.AddSingleton<IEmailSender, SmtpEmailSender>();
@@ -61,12 +66,20 @@ namespace backend
             builder.Services.AddScoped<IAdminService, AdminService>();
             builder.Services.AddScoped<IPaymentService, PaymentService>();
             builder.Services.AddScoped<IAIService, AIService>();
+            builder.Services.AddHttpClient(nameof(GoogleGeminiService), client =>
+            {
+                client.Timeout = TimeSpan.FromMinutes(6);
+            });
+            builder.Services.AddSingleton<IGoogleGeminiService, GoogleGeminiService>();
             builder.Services.AddHttpClient(nameof(LearnOllamaAssistantService), client =>
             {
                 client.Timeout = TimeSpan.FromMinutes(3);
             });
             builder.Services.AddScoped<ILearnOllamaAssistantService, LearnOllamaAssistantService>();
-            builder.Services.AddHttpClient(nameof(SupportChatbotService));
+            builder.Services.AddHttpClient(nameof(SupportChatbotService), client =>
+            {
+                client.Timeout = TimeSpan.FromMinutes(2);
+            });
             builder.Services.AddScoped<ISupportChatbotService, SupportChatbotService>();
             builder.Services.AddHttpClient(nameof(LessonAiImportService));
             builder.Services.AddScoped<ILessonAiImportService, LessonAiImportService>();
@@ -198,6 +211,24 @@ namespace backend
             });
 
             var app = builder.Build();
+
+            // Kiểm tra kết nối Supabase khi khởi động (mật khẩu trong appsettings.Secrets.json)
+            using (var scope = app.Services.CreateScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+                var log = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+                try
+                {
+                    if (db.Database.CanConnect())
+                        log.LogInformation("Đã kết nối PostgreSQL (Supabase) thành công.");
+                    else
+                        log.LogWarning("Không kết nối được database — kiểm tra ConnectionStrings trong appsettings.Secrets.json.");
+                }
+                catch (Exception ex)
+                {
+                    log.LogError(ex, "Lỗi kết nối Supabase — dùng Session pooler (aws-1-<region>.pooler.supabase.com) trong appsettings.Secrets.json.");
+                }
+            }
 
             if (app.Environment.IsDevelopment())
             {

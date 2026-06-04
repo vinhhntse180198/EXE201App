@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
 
 import '../config/api_config.dart';
 
@@ -88,7 +89,12 @@ class ApiClient {
     final headers = _headers(jsonBody: false);
     headers.remove('Content-Type');
     request.headers.addAll(headers);
-    request.files.add(http.MultipartFile.fromBytes(fieldName, bytes, filename: filename));
+    request.files.add(http.MultipartFile.fromBytes(
+      fieldName,
+      bytes,
+      filename: filename,
+      contentType: _mimeFromFilename(filename),
+    ));
     fields?.forEach((k, v) => request.fields[k] = v);
     final streamed = await _client.send(request);
     final response = await http.Response.fromStream(streamed);
@@ -122,5 +128,24 @@ class ApiClient {
       }
     }
     throw ApiException(message, statusCode: response.statusCode);
+  }
+
+  static MediaType _mimeFromFilename(String filename) {
+    final ext = filename.contains('.') ? filename.split('.').last.toLowerCase() : '';
+    switch (ext) {
+      case 'jpg':
+      case 'jpeg':
+        return MediaType('image', 'jpeg');
+      case 'png':
+        return MediaType('image', 'png');
+      case 'gif':
+        return MediaType('image', 'gif');
+      case 'webp':
+        return MediaType('image', 'webp');
+      case 'heic':
+        return MediaType('image', 'heic');
+      default:
+        return MediaType('image', 'jpeg');
+    }
   }
 }

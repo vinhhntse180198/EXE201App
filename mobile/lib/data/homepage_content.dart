@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../utils/yume_links.dart';
+
 /// Nội dung trang chủ — theo mẫu landing YumeGo-ji (mobile).
 class HomepageContent {
   static const brandName = 'YumeGo-ji';
@@ -91,8 +93,23 @@ class HomepageContent {
     ),
   ];
 
-  static const footerLinks = ['Cookies', 'Cộng đồng', 'Quyền riêng tư', 'Điều khoản'];
+  static const footerLinks = <HomepageFooterLink>[
+    HomepageFooterLink('Cookies'),
+    HomepageFooterLink(
+      'Cộng đồng',
+      url: kYumeFacebookUrl,
+    ),
+    HomepageFooterLink('Quyền riêng tư'),
+    HomepageFooterLink('Điều khoản'),
+  ];
   static const footerCopyright = '© 2026 YumeGo-ji Learning. Keep travelling.';
+}
+
+class HomepageFooterLink {
+  const HomepageFooterLink(this.label, {this.url});
+
+  final String label;
+  final String? url;
 }
 
 class HomepageFeatureCard {

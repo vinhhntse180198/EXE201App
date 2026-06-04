@@ -6,7 +6,10 @@ import '../../core/mock/mock_data.dart';
 import '../../core/session/app_session.dart';
 import '../../models/progress_summary.dart';
 import '../../models/user.dart';
+import '../../models/auth_response.dart';
+import '../../models/user_profile.dart';
 import '../../services/learn_service.dart';
+import '../../services/profile_service.dart';
 import '../../widgets/common/error_view.dart';
 import '../../widgets/common/loading_view.dart';
 import '../../utils/jlpt_levels.dart';
@@ -25,6 +28,7 @@ class DashboardScreen extends StatefulWidget {
 
 class _DashboardScreenState extends State<DashboardScreen> {
   final _learn = LearnService(AppSession.instance.api);
+  final _profile = ProfileService(AppSession.instance.api);
 
   ProgressSummary? _summary;
   bool _loading = false;
@@ -42,13 +46,32 @@ class _DashboardScreenState extends State<DashboardScreen> {
       _error = null;
     });
     try {
-      final summary = await _learn.fetchProgressSummary();
-      if (mounted) setState(() => _summary = summary);
+      final results = await Future.wait([
+        _learn.fetchProgressSummary(),
+        _profile.fetchMyProfile(),
+      ]);
+      _syncUserFieldsToSession(results[1] as UserProfile);
+      if (mounted) setState(() => _summary = results[0] as ProgressSummary);
     } catch (e) {
       if (mounted) setState(() => _error = e.toString());
     } finally {
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  void _syncUserFieldsToSession(UserProfile profile) {
+    final session = AppSession.instance.user;
+    if (session == null) return;
+    AppSession.instance.applyAuth(AuthResponse(
+      accessToken: session.accessToken,
+      user: session.user.copyWith(
+        isPremium: profile.isPremium,
+        levelId: profile.levelId,
+        exp: profile.exp > 0 ? profile.exp : session.user.exp,
+        xu: profile.xu > 0 ? profile.xu : session.user.xu,
+      ),
+      needsPlacementTest: session.needsPlacementTest,
+    ));
   }
 
   @override
@@ -98,28 +121,28 @@ class _DashboardScreenState extends State<DashboardScreen> {
           const SizedBox(height: 16),
           RankProgressCard(exp: s.exp),
           const SizedBox(height: 24),
-          if (AppSession.instance.user?.needsPlacementTest == true)
+          if (AppSession.instance.user?.needsPlacementTest == true || user.levelId == null)
             Card(
               color: YumeColors.pinkLight,
               child: ListTile(
-                title: const Text('Chưa làm Placement Test'),
-                subtitle: const Text('Kiểm tra trình độ để mở khóa học phù hợp'),
+                title: Text(user.levelId == null ? 'Chưa xác định level JLPT' : 'Chưa làm Placement Test'),
+                subtitle: const Text('Làm bài kiểm tra đầu vào để mở thi lên level'),
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () => Navigator.of(context).push(
                   MaterialPageRoute<void>(builder: (_) => const PlacementTestScreen()),
                 ),
               ),
             ),
-          if (nextLevelCode(user.levelId) != null) ...[
+          if (nextLevelCodeWithLessons(user.levelId, s.byLevel) != null) ...[
             const SizedBox(height: 12),
             Card(
               child: ListTile(
                 leading: const Icon(Icons.school, color: YumeColors.primary),
-                title: Text('Thi lên ${nextLevelCode(user.levelId)}'),
+                title: Text('Thi lên ${nextLevelCodeWithLessons(user.levelId, s.byLevel)}'),
                 subtitle: Text('Level hiện tại: ${levelCodeFromId(user.levelId)}'),
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () {
-                  final next = nextLevelCode(user.levelId)!;
+                  final next = nextLevelCodeWithLessons(user.levelId, s.byLevel)!;
                   Navigator.of(context).push<bool>(
                     MaterialPageRoute<bool>(
                       builder: (_) => LevelUpTestScreen(toLevel: next),

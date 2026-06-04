@@ -1,7 +1,8 @@
 using System.Linq;
 using System.Text.Json;
 using Dapper;
-using Microsoft.Data.SqlClient;
+using Npgsql;
+using backend.Data;
 
 namespace backend.Services.Game;
 
@@ -16,9 +17,9 @@ public partial class GameService
         public int? LevelId { get; set; }
     }
 
-    private async Task AfterGameSessionCompletedAsync(SqlConnection db, int sessionId, SpEndRow summary)
+    private async Task AfterGameSessionCompletedAsync(NpgsqlConnection db, int sessionId, SpEndRow summary)
     {
-        var meta = await db.QueryFirstOrDefaultAsync<GameSessionMetaRow>(
+        var meta = await db.PgQueryFirstOrDefaultAsync<GameSessionMetaRow>(
             """
             SELECT gs.user_id AS UserId, gs.game_id AS GameId, g.slug AS GameSlug, u.level_id AS LevelId
             FROM dbo.game_sessions gs
@@ -44,14 +45,15 @@ public partial class GameService
         var weeklyGame = await EnsureLeaderboardPeriodAsync(db, "weekly", weekStart, weekEnd, meta.GameId, null,
             "Tuần theo game");
 
-        var sessionAvgTop10Ms = await db.ExecuteScalarAsync<double?>(
+        var sessionAvgTop10Ms = await db.PgExecuteScalarAsync<double?>(
             """
-            SELECT AVG(CAST(x.response_ms AS FLOAT))
+            SELECT AVG(x.response_ms::double precision)
             FROM (
-                SELECT TOP (10) response_ms
-                FROM dbo.game_session_answers
+                SELECT response_ms
+                FROM game_session_answers
                 WHERE session_id = @sid AND response_ms IS NOT NULL
                 ORDER BY question_order
+                LIMIT 10
             ) x
             """,
             new { sid = sessionId });
@@ -113,19 +115,19 @@ public partial class GameService
     }
 
     /// <summary>Thành tích mốc EXP (criteria_type = total_exp). Phần thưởng EXP có thể kích hoạt mốc tiếp theo — lặp tối đa 15 lần.</summary>
-    private async Task EvaluateTotalExpAchievementsAsync(SqlConnection db, int userId)
+    private async Task EvaluateTotalExpAchievementsAsync(NpgsqlConnection db, int userId)
     {
         for (var guard = 0; guard < 15; guard++)
         {
-            var exp = await db.ExecuteScalarAsync<int>(
+            var exp = await db.PgExecuteScalarAsync<int>(
                 "SELECT ISNULL(exp, 0) FROM dbo.users WHERE id = @u", new { u = userId });
 
-            var rows = (await db.QueryAsync<(int id, string slug, string? criteriaJson)>(
+            var rows = (await db.PgQueryAsync<(int id, string slug, string? criteriaJson)>(
                 """
                 SELECT a.id, a.slug, a.criteria_json
                 FROM dbo.achievements a
                 WHERE ISNULL(a.is_active, 1) = 1
-                  AND LOWER(ISNULL(a.criteria_type, N'')) = N'total_exp'
+                  AND LOWER(COALESCE(a.criteria_type, '')) = 'total_exp'
                   AND NOT EXISTS (
                     SELECT 1 FROM dbo.user_achievements ua
                     WHERE ua.user_id = @u AND ua.achievement_id = a.id)
@@ -163,68 +165,75 @@ public partial class GameService
     }
 
     private static async Task<int> EnsureLeaderboardPeriodAsync(
-        SqlConnection db,
+        NpgsqlConnection db,
         string periodType,
         DateTime startsAt,
         DateTime endsAt,
         int? gameId,
         int? levelId,
-        string label)
+        string _)
     {
-        var existing = await db.ExecuteScalarAsync<int?>(
+        var scope = gameId is not null ? "game" : levelId is not null ? "level" : "global";
+        var periodStart = DateOnly.FromDateTime(startsAt);
+        var periodEnd = DateOnly.FromDateTime(endsAt);
+
+        var existing = await db.PgExecuteScalarAsync<int?>(
             """
             SELECT id
-            FROM dbo.leaderboard_periods
-            WHERE period_type = @pt
-              AND starts_at = @s
+            FROM leaderboard_periods
+            WHERE type = @pt
+              AND scope = @scope
+              AND period_start = @s
               AND ((@gid IS NULL AND game_id IS NULL) OR game_id = @gid)
               AND ((@lid IS NULL AND level_id IS NULL) OR level_id = @lid)
             """,
-            new { pt = periodType, s = startsAt, gid = gameId, lid = levelId });
+            new { pt = periodType, scope, s = periodStart, gid = gameId, lid = levelId });
 
         if (existing is not null)
             return existing.Value;
 
-        return await db.ExecuteScalarAsync<int>(
+        return await db.PgExecuteScalarAsync<int>(
             """
-            INSERT INTO dbo.leaderboard_periods (game_id, level_id, period_type, label, starts_at, ends_at, is_current)
-            OUTPUT INSERTED.id
-            VALUES (@gid, @lid, @pt, @lbl, @s, @e, 1)
+            INSERT INTO leaderboard_periods (type, scope, level_id, game_id, period_start, period_end, created_at)
+            VALUES (@pt, @scope, @lid, @gid, @s, @e, NOW() AT TIME ZONE 'utc')
+            RETURNING id
             """,
             new
             {
                 gid = gameId,
                 lid = levelId,
                 pt = periodType,
-                lbl = label,
-                s = startsAt,
-                e = endsAt
+                scope,
+                s = periodStart,
+                e = periodEnd
             });
     }
 
     private static async Task UpsertLeaderboardEntryAsync(
-        SqlConnection db,
+        NpgsqlConnection db,
         int periodId,
         int userId,
         int sessionScore,
         decimal sessionAccuracy,
-        int sessionMaxCombo,
+        int _sessionMaxCombo,
         int? sessionAvgMs)
     {
-        var row = await db.QueryFirstOrDefaultAsync<LeaderboardRow>(
+        var row = await db.PgQueryFirstOrDefaultAsync<LeaderboardRow>(
             """
-            SELECT score, games_played, accuracy_avg, best_combo, avg_duration_ms
-            FROM dbo.leaderboard_entries
+            SELECT score, accuracy_percent
+            FROM leaderboard_entries
             WHERE period_id = @p AND user_id = @u
             """,
             new { p = periodId, u = userId });
 
+        var avgSec = sessionAvgMs is null ? (decimal?)null : sessionAvgMs.Value / 1000m;
+
         if (row is null)
         {
-            await db.ExecuteAsync(
+            await db.PgExecuteAsync(
                 """
-                INSERT INTO dbo.leaderboard_entries (period_id, user_id, score, rank, accuracy_avg, games_played, best_combo, avg_duration_ms, updated_at)
-                VALUES (@p, @u, @score, NULL, @acc, 1, @combo, @avgms, SYSUTCDATETIME())
+                INSERT INTO leaderboard_entries (period_id, user_id, rank, score, accuracy_percent, avg_response_seconds, created_at, updated_at)
+                VALUES (@p, @u, 1, @score, @acc, @avgSec, NOW() AT TIME ZONE 'utc', NOW() AT TIME ZONE 'utc')
                 """,
                 new
                 {
@@ -232,33 +241,23 @@ public partial class GameService
                     u = userId,
                     score = sessionScore,
                     acc = sessionAccuracy,
-                    combo = sessionMaxCombo,
-                    avgms = sessionAvgMs
+                    avgSec
                 });
             return;
         }
 
-        var newGames = row.games_played + 1;
         var newScore = Math.Max(row.score, sessionScore);
-        var newAcc = (row.accuracy_avg * row.games_played + sessionAccuracy) / newGames;
-        var newCombo = Math.Max(row.best_combo, sessionMaxCombo);
-        int? newAvgMs = row.avg_duration_ms;
-        if (sessionAvgMs is not null)
-        {
-            newAvgMs = newAvgMs is null
-                ? sessionAvgMs
-                : Math.Min(newAvgMs.Value, sessionAvgMs.Value);
-        }
+        var newAcc = row.accuracy_percent is null
+            ? sessionAccuracy
+            : (row.accuracy_percent.Value + sessionAccuracy) / 2;
 
-        await db.ExecuteAsync(
+        await db.PgExecuteAsync(
             """
-            UPDATE dbo.leaderboard_entries
+            UPDATE leaderboard_entries
             SET score = @score,
-                games_played = @gp,
-                accuracy_avg = @acc,
-                best_combo = @combo,
-                avg_duration_ms = @avgms,
-                updated_at = SYSUTCDATETIME()
+                accuracy_percent = @acc,
+                avg_response_seconds = COALESCE(@avgSec, avg_response_seconds),
+                updated_at = NOW() AT TIME ZONE 'utc'
             WHERE period_id = @p AND user_id = @u
             """,
             new
@@ -266,24 +265,19 @@ public partial class GameService
                 p = periodId,
                 u = userId,
                 score = newScore,
-                gp = newGames,
                 acc = newAcc,
-                combo = newCombo,
-                avgms = newAvgMs
+                avgSec
             });
     }
 
     private sealed class LeaderboardRow
     {
         public int score { get; set; }
-        public int games_played { get; set; }
-        public decimal accuracy_avg { get; set; }
-        public int best_combo { get; set; }
-        public int? avg_duration_ms { get; set; }
+        public decimal? accuracy_percent { get; set; }
     }
 
     private async Task EvaluateSessionAchievementsAsync(
-        SqlConnection db,
+        NpgsqlConnection db,
         GameSessionMetaRow meta,
         SpEndRow summary,
         int sessionId,
@@ -302,14 +296,14 @@ public partial class GameService
         if (summary.max_combo >= 5)
             await TryGrantAchievementBySlugAsync(db, meta.UserId, "combo-king");
 
-        var answerCount = await db.ExecuteScalarAsync<int>(
+        var answerCount = await db.PgExecuteScalarAsync<int>(
             "SELECT COUNT(*) FROM dbo.game_session_answers WHERE session_id = @sid AND response_ms IS NOT NULL",
             new { sid = sessionId });
 
         if (answerCount >= 10 && avgTop10Ms is not null && avgTop10Ms < 2000)
             await TryGrantAchievementBySlugAsync(db, meta.UserId, "speed-demon");
 
-        var distinctDays = await db.ExecuteScalarAsync<int>(
+        var distinctDays = await db.PgExecuteScalarAsync<int>(
             """
             SELECT COUNT(DISTINCT CAST(completed_at AS DATE))
             FROM dbo.user_daily_challenges
@@ -321,9 +315,9 @@ public partial class GameService
             await TryGrantAchievementBySlugAsync(db, meta.UserId, "daily-dedication");
     }
 
-    private async Task TryGrantAchievementBySlugAsync(SqlConnection db, int userId, string slug)
+    private async Task TryGrantAchievementBySlugAsync(NpgsqlConnection db, int userId, string slug)
     {
-        var ach = await db.QueryFirstOrDefaultAsync<(int id, int exp, int xu)?>(
+        var ach = await db.PgQueryFirstOrDefaultAsync<(int id, int exp, int xu)?>(
             """
             SELECT id, reward_exp, reward_xu
             FROM dbo.achievements
@@ -334,7 +328,7 @@ public partial class GameService
         if (ach is null)
             return;
 
-        var exists = await db.ExecuteScalarAsync<int>(
+        var exists = await db.PgExecuteScalarAsync<int>(
             """
             SELECT COUNT(1) FROM dbo.user_achievements WHERE user_id = @u AND achievement_id = @a
             """,
@@ -343,16 +337,16 @@ public partial class GameService
         if (exists > 0)
             return;
 
-        await db.ExecuteAsync(
+        await db.PgExecuteAsync(
             """
-            INSERT INTO dbo.user_achievements (user_id, achievement_id, earned_at)
-            VALUES (@u, @a, SYSUTCDATETIME())
+            INSERT INTO user_achievements (user_id, achievement_id, unlocked_at)
+            VALUES (@u, @a, NOW() AT TIME ZONE 'utc')
             """,
             new { u = userId, a = ach.Value.id });
 
         if (ach.Value.exp > 0 || ach.Value.xu > 0)
         {
-            await db.ExecuteAsync(
+            await db.PgExecuteAsync(
                 "UPDATE dbo.users SET exp = exp + @e, xu = xu + @x WHERE id = @u",
                 new { e = ach.Value.exp, x = ach.Value.xu, u = userId });
         }

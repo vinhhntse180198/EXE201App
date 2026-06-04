@@ -1,11 +1,4 @@
-appsettings.json
-appsettings.Development.json
 appsettings.Secrets.json
-bin/
-obj/
-.vs/
-*.user
-package-lock.json
 
 #Ignore cursor AI rules
 .cursor\rules\codacy.mdc

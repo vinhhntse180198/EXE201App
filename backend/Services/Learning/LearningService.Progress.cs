@@ -150,7 +150,11 @@ public partial class LearningService
                       p.Status == "completed" && l.IsPublished
                 select p.LessonId).Distinct().CountAsync();
 
-            var pct = totalPublished == 0 ? 0 : Math.Round(100.0 * completed / totalPublished, 2);
+            // Chỉ hiển thị level có bài học đã publish (ẩn N2/N1 khi chưa có nội dung).
+            if (totalPublished == 0)
+                continue;
+
+            var pct = Math.Round(100.0 * completed / totalPublished, 2);
             byLevel.Add(new LevelCompletionDto
             {
                 LevelId = lv.Id,

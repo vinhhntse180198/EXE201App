@@ -36,6 +36,9 @@ class ChatRoom {
     if (isDirect) {
       final peer = peerDisplayName?.trim();
       if (peer != null && peer.isNotEmpty) return peer;
+      if (peerUserId != null) return 'User #$peerUserId';
+      final slugIds = RegExp(r'direct-(\d+)-(\d+)').firstMatch((slug ?? '').toLowerCase());
+      if (slugIds != null) return 'Chat #${slugIds.group(2)}';
       if (name.startsWith('Direct:')) return name.replaceFirst('Direct:', '').trim();
     }
     return name;

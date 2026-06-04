@@ -15,6 +15,7 @@ import '../../widgets/home/home_landing_hero.dart';
 import '../../widgets/home/home_testimonials_section.dart';
 import '../../widgets/yume/yume_sakura_background.dart';
 import '../../widgets/yume/yume_stat_chip.dart';
+import '../auth/login_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key, this.onOpenTab});
@@ -35,7 +36,8 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    if (!designMode) _load();
+    // Guest mode: không gọi API yêu cầu auth.
+    if (!designMode && AppSession.instance.isLoggedIn) _load();
   }
 
   Future<void> _load() async {
@@ -66,6 +68,15 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final loggedIn = designMode || AppSession.instance.isLoggedIn;
+
+    // Nếu user vừa đăng nhập và quay về Home, đảm bảo tự tải dữ liệu thật.
+    if (loggedIn && !designMode && !_loading && _error == null && _summary == null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && !_loading && _summary == null) _load();
+      });
+    }
+
     if (!designMode && _loading) {
       return const SizedBox.expand(child: LoadingView(message: 'Đang tải...'));
     }
@@ -73,19 +84,13 @@ class _HomeScreenState extends State<HomeScreen> {
       return SizedBox.expand(child: ErrorView(message: _error!, onRetry: _load));
     }
 
-    if (!designMode && AppSession.instance.user?.user == null) {
-      return const SizedBox.expand(
-        child: Center(child: Text('Chưa đăng nhập — thoát app và đăng nhập lại.')),
-      );
-    }
-
-    final user = designMode ? MockData.user : AppSession.instance.user!.user;
+    final user = designMode ? MockData.user : AppSession.instance.user?.user;
     final summary = designMode
         ? MockData.progressSummary
         : (_summary ?? const ProgressSummary(exp: 0, xu: 0, streakDays: 0, byLevel: []));
 
-    final name = _firstName(user.username);
-    final welcome = name.isNotEmpty ? 'Chào $name 👋' : null;
+    final name = _firstName(user?.username ?? '');
+    final welcome = loggedIn && name.isNotEmpty ? 'Chào $name 👋' : null;
 
     return SizedBox.expand(
       child: YumeSakuraBackground(
@@ -97,31 +102,38 @@ class _HomeScreenState extends State<HomeScreen> {
               children: [
                 HomeLandingHero(
                   welcomeLine: welcome,
-                  ctaLabel: HomepageContent.heroCtaMember,
-                  onCta: () => widget.onOpenTab?.call(2),
+                  ctaLabel: loggedIn ? HomepageContent.heroCtaMember : HomepageContent.heroCtaGuest,
+                  onCta: () {
+                    if (loggedIn) {
+                      widget.onOpenTab?.call(2);
+                    } else {
+                      Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const LoginScreen()));
+                    }
+                  },
                 ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: YumeStatChip(icon: Icons.star_rounded, label: 'EXP', value: '${summary.exp}'),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: YumeStatChip(icon: Icons.monetization_on_rounded, label: 'Xu', value: '${summary.xu}'),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: YumeStatChip(
-                          icon: Icons.local_fire_department_rounded,
-                          label: 'Streak',
-                          value: '${summary.streakDays}',
+                if (loggedIn)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: YumeStatChip(icon: Icons.star_rounded, label: 'EXP', value: '${summary.exp}'),
                         ),
-                      ),
-                    ],
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: YumeStatChip(icon: Icons.monetization_on_rounded, label: 'Xu', value: '${summary.xu}'),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: YumeStatChip(
+                            icon: Icons.local_fire_department_rounded,
+                            label: 'Nỗ lực',
+                            value: '${summary.streakDays}',
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
                 HomeFeaturesSection(onFeatureTap: _onFeatureTap),
                 const HomeHanamiTimeline(),
                 const HomeTestimonialsSection(),

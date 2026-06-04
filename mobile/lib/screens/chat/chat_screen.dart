@@ -11,6 +11,7 @@ import '../../services/chat_service.dart';
 import '../../services/social_service.dart';
 import '../../widgets/chat/create_chat_room_sheet.dart';
 import '../../utils/jlpt_levels.dart';
+import '../../utils/image_url.dart';
 import '../../widgets/common/error_view.dart';
 import '../../widgets/common/loading_view.dart';
 import 'chat_room_screen.dart';
@@ -140,7 +141,7 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
   }
 
   Future<void> _openRoom(ChatRoom room, {bool joinFirst = false}) async {
-    if (!designMode && joinFirst) {
+    if (!designMode && joinFirst && !room.isDirect) {
       try {
         await _chat.joinRoom(room.id);
       } catch (_) {}
@@ -448,6 +449,9 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
   }
 
   Widget _friendTile(FriendUser f) {
+    final avatarUrl = buildImageUrl(f.avatarUrl);
+    final initial = f.label.isNotEmpty ? f.label[0].toUpperCase() : '?';
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Material(
@@ -460,12 +464,11 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
             children: [
               CircleAvatar(
                 backgroundColor: YumeColors.pinkLight,
-                backgroundImage: f.avatarUrl != null && f.avatarUrl!.isNotEmpty
-                    ? NetworkImage(f.avatarUrl!)
-                    : null,
-                child: f.avatarUrl == null || f.avatarUrl!.isEmpty
+                backgroundImage: avatarUrl.isNotEmpty ? NetworkImage(avatarUrl) : null,
+                onBackgroundImageError: (_, __) {},
+                child: avatarUrl.isEmpty
                     ? Text(
-                        f.label.isNotEmpty ? f.label[0].toUpperCase() : '?',
+                        initial,
                         style: const TextStyle(color: YumeColors.primary, fontWeight: FontWeight.bold),
                       )
                     : null,

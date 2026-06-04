@@ -14,12 +14,16 @@ EXE201App/
 ### Cấu hình lần đầu
 
 ```powershell
+# Cách nhanh (từ thư mục gốc repo)
+.\run-backend.ps1
+
+# Hoặc tay:
 cd backend
 copy appsettings.Example.json appsettings.json
 copy appsettings.Example.json appsettings.Development.json
 # Sửa ConnectionStrings (SQL Server) trong hai file vừa tạo
 dotnet restore
-dotnet run
+dotnet run --launch-profile http
 ```
 
 API mặc định: **http://localhost:5056** (profile `http` trong `Properties/launchSettings.json`).
@@ -34,10 +38,16 @@ Database: chạy script trong `backend/doc/sql/` (DDL rồi seed).
 
 ## 2. Mobile (Flutter)
 
+Flutter SDK (máy nhóm): `E:\FPT\PRM393\flutter_sdk\flutter`
+
 ```powershell
+# Cách nhanh (từ thư mục gốc repo)
+.\run-mobile.ps1
+
+# Hoặc tay:
 cd mobile
-flutter pub get
-flutter run
+E:\FPT\PRM393\flutter_sdk\flutter\bin\flutter.bat pub get
+E:\FPT\PRM393\flutter_sdk\flutter\bin\flutter.bat run
 ```
 
 | Thiết bị | API mặc định |

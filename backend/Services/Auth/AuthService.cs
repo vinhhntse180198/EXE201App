@@ -7,14 +7,14 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
 using backend.Authorization;
-using backend.Data;
 using backend.DTOs.Auth;
 using backend.DTOs.User;
 using backend.Models.User;
 using backend.Services.Email;
 using Google.Apis.Auth;
 using Microsoft.AspNetCore.Hosting;
-using Microsoft.Data.SqlClient;
+using Npgsql;
+using backend.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
@@ -544,7 +544,7 @@ public class AuthService : IAuthService
             {
                 await db.Database.ExecuteSqlRawAsync(sql, userId);
             }
-            catch (Exception ex) when (SqlErrorNumber(ex) == 208)
+            catch (Exception ex) when (DbExceptionHelper.IsMissingRelation(ex))
             {
                 // Invalid object name — bảng không có trong DB này
             }
@@ -553,22 +553,11 @@ public class AuthService : IAuthService
 
     private static readonly string[] OptionalUserScopedDeleteSql =
     {
-        "DELETE FROM [otps] WHERE [user_id] = {0}",
-        "DELETE FROM [user_otps] WHERE [user_id] = {0}",
-        "DELETE FROM [email_verification_tokens] WHERE [user_id] = {0}",
-        "DELETE FROM [password_reset_tokens] WHERE [user_id] = {0}",
+        "DELETE FROM otps WHERE user_id = {0}",
+        "DELETE FROM user_otps WHERE user_id = {0}",
+        "DELETE FROM email_verification_tokens WHERE user_id = {0}",
+        "DELETE FROM password_reset_tokens WHERE user_id = {0}",
     };
-
-    private static int? SqlErrorNumber(Exception ex)
-    {
-        for (var e = ex; e != null; e = e.InnerException!)
-        {
-            if (e is SqlException se)
-                return se.Number;
-        }
-
-        return null;
-    }
 
     private string GenerateJwtToken(User user)
     {

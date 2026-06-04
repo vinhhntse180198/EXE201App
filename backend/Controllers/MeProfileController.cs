@@ -36,38 +36,41 @@ public class MeProfileController : ControllerBase
         var userId = GetUserId();
         if (userId == 0) return Unauthorized();
 
-        var isPremium = await _db.Users.AsNoTracking()
+        var profile = await _db.UserProfiles.AsNoTracking().FirstOrDefaultAsync(p => p.UserId == userId);
+        return Ok(await BuildProfileResponseAsync(userId, profile));
+    }
+
+    private async Task<object> BuildProfileResponseAsync(int userId, UserProfile? profile)
+    {
+        var userRow = await _db.Users.AsNoTracking()
             .Where(u => u.Id == userId)
-            .Select(u => u.IsPremium)
+            .Select(u => new { u.IsPremium, u.LevelId, u.Exp, u.Xu })
             .FirstOrDefaultAsync();
 
-        var profile = await _db.UserProfiles.AsNoTracking().FirstOrDefaultAsync(p => p.UserId == userId);
-        if (profile == null)
+        string? levelCode = null;
+        if (userRow?.LevelId is int lid)
         {
-            return Ok(new
-            {
-                userId,
-                isPremium,
-                displayName = (string?)null,
-                avatarUrl = (string?)null,
-                coverUrl = (string?)null,
-                bio = (string?)null,
-                dateOfBirth = (DateTime?)null,
-                theme = (string?)null
-            });
+            levelCode = await _db.Levels.AsNoTracking()
+                .Where(l => l.Id == lid)
+                .Select(l => l.Code)
+                .FirstOrDefaultAsync();
         }
 
-        return Ok(new
+        return new
         {
-            userId = profile.UserId,
-            isPremium,
-            displayName = profile.DisplayName,
-            avatarUrl = profile.AvatarUrl,
-            coverUrl = profile.CoverUrl,
-            bio = profile.Bio,
-            dateOfBirth = profile.DateOfBirth,
-            theme = profile.Theme
-        });
+            userId = profile?.UserId ?? userId,
+            isPremium = userRow?.IsPremium ?? false,
+            levelId = userRow?.LevelId,
+            levelCode,
+            exp = userRow?.Exp ?? 0,
+            xu = userRow?.Xu ?? 0,
+            displayName = profile?.DisplayName,
+            avatarUrl = profile?.AvatarUrl,
+            coverUrl = profile?.CoverUrl,
+            bio = profile?.Bio,
+            dateOfBirth = profile?.DateOfBirth,
+            theme = profile?.Theme
+        };
     }
 
     [HttpPut]
@@ -122,15 +125,6 @@ public class MeProfileController : ControllerBase
         profile.UpdatedAt = now;
         await _db.SaveChangesAsync();
 
-        return Ok(new
-        {
-            userId = profile.UserId,
-            displayName = profile.DisplayName,
-            avatarUrl = profile.AvatarUrl,
-            coverUrl = profile.CoverUrl,
-            bio = profile.Bio,
-            dateOfBirth = profile.DateOfBirth,
-            theme = profile.Theme
-        });
+        return Ok(await BuildProfileResponseAsync(userId, profile));
     }
 }

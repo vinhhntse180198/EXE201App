@@ -34,7 +34,8 @@ public class UploadsController : ControllerBase
         if (file == null || file.Length == 0)
             return BadRequest(new { message = "File không hợp lệ." });
 
-        if (!file.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
+        if (!file.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase)
+            && !IsImageExtension(Path.GetExtension(file.FileName)))
             return BadRequest(new { message = "Chỉ cho phép upload hình ảnh." });
 
         var uploadsRoot = _env.WebRootPath;
@@ -61,6 +62,17 @@ public class UploadsController : ControllerBase
 
         var url = $"/uploads/{fileName}";
         return Ok(new { url });
+    }
+
+    private static bool IsImageExtension(string? ext)
+    {
+        if (string.IsNullOrWhiteSpace(ext)) return false;
+        return ext.Equals(".jpg", StringComparison.OrdinalIgnoreCase)
+            || ext.Equals(".jpeg", StringComparison.OrdinalIgnoreCase)
+            || ext.Equals(".png", StringComparison.OrdinalIgnoreCase)
+            || ext.Equals(".gif", StringComparison.OrdinalIgnoreCase)
+            || ext.Equals(".webp", StringComparison.OrdinalIgnoreCase)
+            || ext.Equals(".heic", StringComparison.OrdinalIgnoreCase);
     }
 }
 

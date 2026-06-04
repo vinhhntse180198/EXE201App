@@ -1,3 +1,5 @@
+import '../utils/json_field.dart';
+
 class LevelCompletion {
   const LevelCompletion({
     required this.levelId,
@@ -17,12 +19,12 @@ class LevelCompletion {
 
   factory LevelCompletion.fromJson(Map<String, dynamic> json) {
     return LevelCompletion(
-      levelId: json['levelId'] as int? ?? 0,
-      levelCode: json['levelCode'] as String? ?? '',
-      levelName: json['levelName'] as String? ?? '',
-      totalPublishedLessons: json['totalPublishedLessons'] as int? ?? 0,
-      completedLessons: json['completedLessons'] as int? ?? 0,
-      completionPercent: (json['completionPercent'] as num?)?.toDouble() ?? 0,
+      levelId: jsonInt(json, 'levelId') ?? 0,
+      levelCode: jsonStr(json, 'levelCode') ?? '',
+      levelName: jsonStr(json, 'levelName') ?? '',
+      totalPublishedLessons: jsonInt(json, 'totalPublishedLessons') ?? 0,
+      completedLessons: jsonInt(json, 'completedLessons') ?? 0,
+      completionPercent: (jsonField(json, 'completionPercent') as num?)?.toDouble() ?? 0,
     );
   }
 }
@@ -41,15 +43,16 @@ class ProgressSummary {
   final List<LevelCompletion> byLevel;
 
   factory ProgressSummary.fromJson(Map<String, dynamic> json) {
-    final levels = json['byLevel'];
+    final levels = jsonField(json, 'byLevel');
     return ProgressSummary(
-      exp: json['exp'] as int? ?? 0,
-      xu: json['xu'] as int? ?? 0,
-      streakDays: json['streakDays'] as int? ?? 0,
+      exp: jsonInt(json, 'exp') ?? 0,
+      xu: jsonInt(json, 'xu') ?? 0,
+      streakDays: jsonInt(json, 'streakDays') ?? 0,
       byLevel: levels is List
           ? levels
               .whereType<Map<String, dynamic>>()
               .map(LevelCompletion.fromJson)
+              .where((l) => l.totalPublishedLessons > 0)
               .toList()
           : [],
     );

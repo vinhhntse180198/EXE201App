@@ -8,7 +8,8 @@ using backend.Services.Auth;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Data.SqlClient;
+using Npgsql;
+using backend.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
@@ -98,6 +99,10 @@ public class AuthController : ControllerBase
         {
             return BadRequest(new { message = ex.Message });
         }
+        catch (Exception ex) when (DbExceptionHelper.IsConnectionError(ex))
+        {
+            return StatusCode(503, new { message = "Không kết nối được cơ sở dữ liệu. Kiểm tra Supabase trong appsettings.Secrets.json." });
+        }
     }
 
     [HttpPost("google")]
@@ -112,6 +117,10 @@ public class AuthController : ControllerBase
         catch (InvalidOperationException ex)
         {
             return BadRequest(new { message = ex.Message });
+        }
+        catch (Exception ex) when (DbExceptionHelper.IsConnectionError(ex))
+        {
+            return StatusCode(503, new { message = "Không kết nối được cơ sở dữ liệu. Kiểm tra Supabase trong appsettings.Secrets.json." });
         }
     }
 
@@ -185,9 +194,9 @@ public class AuthController : ControllerBase
         }
         catch (DbUpdateException ex)
         {
-            var sqlEx = ex.InnerException as SqlException ?? ex.InnerException?.InnerException as SqlException;
+            var sqlEx = ex.InnerException as PostgresException ?? ex.InnerException?.InnerException as PostgresException;
             var detail = _env.IsDevelopment() && sqlEx != null
-                ? $"#{sqlEx.Number}: {sqlEx.Message}"
+                ? $"#{sqlEx.SqlState}: {sqlEx.Message}"
                 : null;
             return Conflict(new
             {

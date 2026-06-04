@@ -4,7 +4,8 @@ using backend.DTOs.Game;
 using backend.Services.Game;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Data.SqlClient;
+using Npgsql;
+using backend.Data;
 
 namespace backend.Controllers;
 
@@ -99,7 +100,7 @@ public class GameController : ControllerBase
         {
             return BadRequest(new GameApiError("POWERUP_ERROR", ex.Message));
         }
-        catch (SqlException ex)
+        catch (PostgresException ex)
         {
             return StatusCode(StatusCodes.Status500InternalServerError,
                 new GameApiError("GAME_ANSWER_SQL", ex.Message));
@@ -119,7 +120,7 @@ public class GameController : ControllerBase
             return StatusCode(StatusCodes.Status403Forbidden,
                 new GameApiError("SESSION_INVALID", "Session không thuộc tài khoản này."));
         }
-        catch (SqlException ex)
+        catch (PostgresException ex)
         {
             return StatusCode(StatusCodes.Status500InternalServerError,
                 new GameApiError("GAME_END_SQL", ex.Message));
@@ -142,7 +143,7 @@ public class GameController : ControllerBase
         {
             return BadRequest(new GameApiError("KANJI_MEMORY", ex.Message));
         }
-        catch (SqlException ex)
+        catch (PostgresException ex)
         {
             return StatusCode(StatusCodes.Status500InternalServerError,
                 new GameApiError("KANJI_MEMORY_SQL", ex.Message));
@@ -172,7 +173,7 @@ public class GameController : ControllerBase
         {
             return BadRequest(new GameApiError("SHOP_ERROR", ex.Message));
         }
-        catch (SqlException ex)
+        catch (PostgresException ex)
         {
             return StatusCode(StatusCodes.Status500InternalServerError,
                 new GameApiError("SHOP_SQL", ex.Message));

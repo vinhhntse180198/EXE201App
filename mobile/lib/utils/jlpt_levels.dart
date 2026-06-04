@@ -1,3 +1,5 @@
+import '../models/progress_summary.dart';
+
 /// Mã JLPT từ levelId backend (1=N5 … 5=N1).
 String levelCodeFromId(int? levelId) {
   switch (levelId) {
@@ -34,8 +36,9 @@ String levelChatSlugFromId(int? levelId) {
   }
 }
 
-/// Level kế tiếp để thi lên (null nếu đã N1).
+/// Level kế tiếp để thi lên (null nếu chưa có level hoặc đã N1).
 String? nextLevelCode(int? levelId) {
+  if (levelId == null) return null;
   switch (levelId) {
     case 1:
       return 'N4';
@@ -46,6 +49,34 @@ String? nextLevelCode(int? levelId) {
     case 4:
       return 'N1';
     default:
-      return 'N4';
+      return null;
+  }
+}
+
+/// Level kế tiếp chỉ khi đã có bài học publish (tránh gợi ý thi lên N2/N1 trống).
+String? nextLevelCodeWithLessons(int? levelId, List<LevelCompletion> byLevel) {
+  final next = nextLevelCode(levelId);
+  if (next == null) return null;
+  final nextId = levelIdFromCode(next);
+  if (nextId == null) return null;
+  final hasLessons = byLevel.any((l) => l.levelId == nextId && l.totalPublishedLessons > 0);
+  return hasLessons ? next : null;
+}
+
+/// Map mã JLPT → levelId backend.
+int? levelIdFromCode(String? code) {
+  switch ((code ?? '').trim().toUpperCase()) {
+    case 'N5':
+      return 1;
+    case 'N4':
+      return 2;
+    case 'N3':
+      return 3;
+    case 'N2':
+      return 4;
+    case 'N1':
+      return 5;
+    default:
+      return null;
   }
 }

@@ -47,6 +47,10 @@ mobile/**/ios/Flutter/Flutter.podspec
 *.keystore
 google-services.json
 
+# Runtime uploads (local dev only)
+backend/wwwroot/uploads/*
+!backend/wwwroot/uploads/.gitkeep
+
 # Legacy root build (trước khi chuyển vào mobile/)
 /build/
 .dart_tool/

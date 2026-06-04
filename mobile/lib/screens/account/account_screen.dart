@@ -1,6 +1,5 @@
 import 'dart:typed_data';
 
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
 import '../../config/app_flags.dart';
@@ -18,6 +17,9 @@ import '../../services/profile_service.dart';
 import '../../services/social_service.dart';
 import '../../utils/account_format.dart';
 import '../../utils/image_url.dart';
+import '../../utils/jlpt_levels.dart';
+import '../../utils/pick_image.dart';
+import '../../utils/yume_links.dart';
 import '../../widgets/account/account_hanami_widgets.dart';
 import '../../widgets/social/sakura_feed_widgets.dart';
 import '../../widgets/common/error_view.dart';
@@ -26,16 +28,6 @@ import '../auth/login_screen.dart';
 import '../social/community_screen.dart';
 import '../social/friends_screen.dart';
 import '../upgrade/upgrade_screen.dart';
-
-String _levelCodeFromUser(User user) {
-  final id = user.levelId;
-  if (id == 1) return 'N5';
-  if (id == 2) return 'N4';
-  if (id == 3) return 'N3';
-  if (id == 4) return 'N2';
-  if (id == 5) return 'N1';
-  return 'N5';
-}
 
 class AccountScreen extends StatefulWidget {
   const AccountScreen({super.key});
@@ -109,8 +101,16 @@ class _AccountScreenState extends State<AccountScreen> {
 
   bool get _isPremium => _profileData?.isPremium ?? _sessionUser.isPremium;
 
+  int? get _effectiveLevelId => _profileData?.levelId ?? _sessionUser.levelId;
+
+  String get _levelCode {
+    final fromProfile = _profileData?.levelCode?.trim();
+    if (fromProfile != null && fromProfile.isNotEmpty) return fromProfile.toUpperCase();
+    return levelCodeFromId(_effectiveLevelId);
+  }
+
   int get _levelCompletionPct {
-    final code = _levelCodeFromUser(_sessionUser);
+    final code = _levelCode;
     final row = _summary?.byLevel.where((l) => l.levelCode.toUpperCase() == code).firstOrNull;
     return (row?.completionPercent ?? 0).round().clamp(0, 100);
   }
@@ -134,7 +134,7 @@ class _AccountScreenState extends State<AccountScreen> {
         _social.fetchFriendsCount(),
       ]);
       final profile = results[0] as UserProfile;
-      _syncPremiumToSession(profile.isPremium);
+      _syncUserFieldsToSession(profile);
       if (mounted) {
         setState(() {
           _profileData = profile;
@@ -180,25 +180,31 @@ class _AccountScreenState extends State<AccountScreen> {
     }
   }
 
-  void _syncPremiumToSession(bool isPremium) {
+  void _syncUserFieldsToSession(UserProfile profile) {
     final session = AppSession.instance.user;
     if (session == null) return;
     AppSession.instance.applyAuth(AuthResponse(
       accessToken: session.accessToken,
-      user: session.user.copyWith(isPremium: isPremium),
+      user: session.user.copyWith(
+        isPremium: profile.isPremium,
+        levelId: profile.levelId,
+        exp: profile.exp > 0 ? profile.exp : session.user.exp,
+        xu: profile.xu > 0 ? profile.xu : session.user.xu,
+      ),
       needsPlacementTest: session.needsPlacementTest,
     ));
   }
 
   Future<void> _pickAndUploadAvatar() async {
-    final picked = await FilePicker.platform.pickFiles(type: FileType.image, withData: true);
-    final file = picked?.files.single;
-    if (file?.bytes == null) return;
+    final picked = await pickImageWithSheet(context);
+    if (picked == null) return;
     setState(() => _uploadingAvatar = true);
     try {
-      final url = await _profile.uploadImage(file!.bytes!, file.name);
+      final url = await _profile.uploadImage(picked.bytes, picked.filename);
       final updated = await _profile.updateMyProfile(avatarUrl: url);
-      if (mounted) setState(() => _profileData = updated);
+      if (mounted) {
+        setState(() => _profileData = updated.copyWith(isPremium: _profileData?.isPremium ?? updated.isPremium));
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Không upload được avatar: $e')));
@@ -209,14 +215,15 @@ class _AccountScreenState extends State<AccountScreen> {
   }
 
   Future<void> _pickAndUploadCover() async {
-    final picked = await FilePicker.platform.pickFiles(type: FileType.image, withData: true);
-    final file = picked?.files.single;
-    if (file?.bytes == null) return;
+    final picked = await pickImageWithSheet(context);
+    if (picked == null) return;
     setState(() => _uploadingCover = true);
     try {
-      final url = await _profile.uploadImage(file!.bytes!, file.name);
+      final url = await _profile.uploadImage(picked.bytes, picked.filename);
       final updated = await _profile.updateMyProfile(coverUrl: url);
-      if (mounted) setState(() => _profileData = updated);
+      if (mounted) {
+        setState(() => _profileData = updated.copyWith(isPremium: _profileData?.isPremium ?? updated.isPremium));
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Không tải được ảnh bìa: $e')));
@@ -241,7 +248,9 @@ class _AccountScreenState extends State<AccountScreen> {
     if (ok != true) return;
     try {
       final updated = await _profile.updateMyProfile(coverUrl: '');
-      if (mounted) setState(() => _profileData = updated);
+      if (mounted) {
+        setState(() => _profileData = updated.copyWith(isPremium: _profileData?.isPremium ?? updated.isPremium));
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Không xóa được ảnh bìa: $e')));
@@ -286,7 +295,9 @@ class _AccountScreenState extends State<AccountScreen> {
     if (saved != true) return;
     try {
       final updated = await _profile.updateMyProfile(displayName: displayName, bio: bio);
-      if (mounted) setState(() => _profileData = updated);
+      if (mounted) {
+        setState(() => _profileData = updated.copyWith(isPremium: _profileData?.isPremium ?? updated.isPremium));
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lưu thất bại: $e')));
@@ -295,12 +306,11 @@ class _AccountScreenState extends State<AccountScreen> {
   }
 
   Future<void> _pickPostImage() async {
-    final picked = await FilePicker.platform.pickFiles(type: FileType.image, withData: true);
-    final file = picked?.files.single;
-    if (file?.bytes == null) return;
+    final picked = await pickImageWithSheet(context);
+    if (picked == null) return;
     setState(() {
-      _postImageBytes = file!.bytes;
-      _postImageName = file.name;
+      _postImageBytes = picked.bytes;
+      _postImageName = picked.filename;
     });
   }
 
@@ -449,6 +459,11 @@ class _AccountScreenState extends State<AccountScreen> {
         elevation: 0,
         actions: [
           IconButton(
+            icon: const Icon(Icons.facebook),
+            tooltip: 'Fanpage Facebook',
+            onPressed: () => openYumeFacebookPage(context),
+          ),
+          IconButton(
             icon: const Icon(Icons.groups_outlined),
             tooltip: 'Cộng đồng',
             onPressed: () => Navigator.of(context).push(
@@ -478,7 +493,7 @@ class _AccountScreenState extends State<AccountScreen> {
     final summary = designMode
         ? MockData.progressSummary
         : (_summary ?? const ProgressSummary(exp: 0, xu: 0, streakDays: 0, byLevel: []));
-    final levelCode = _levelCodeFromUser(user);
+    final levelCode = _levelCode;
     final coverUrl = buildImageUrl(profile?.coverUrl);
     final avatarUrl = buildImageUrl(profile?.avatarUrl);
     final journeyAgg = aggregateLessonProgress(summary.byLevel);
