@@ -1,4 +1,4 @@
-# EXE201App — YumeGo-ji (monorepo)
+# EXE201App — YumeGo-Ji (monorepo)
 
 Repo gồm **API backend** (.NET 8) và **app mobile** (Flutter), dùng chung hệ thống EXE201.
 
@@ -6,9 +6,24 @@ Repo gồm **API backend** (.NET 8) và **app mobile** (Flutter), dùng chung h�
 EXE201App/
 ├── backend/          # ASP.NET Core API — http://localhost:5056
 ├── mobile/           # Flutter app
+├── docs/screenshots/ # Ảnh màn hình app (README)
 ├── scripts/          # Tiện ích DB / bài học (Supabase) — tùy chọn
 └── README.md
 ```
+
+## Giao diện app (screenshots)
+
+### Đăng nhập & Trang chủ
+
+| Trang chủ (khách) | Đăng nhập | Trang chủ (đã đăng nhập) |
+|:---:|:---:|:---:|
+| ![Trang chủ khách](docs/screenshots/01-trang-chu-khach.png) | ![Đăng nhập](docs/screenshots/02-dang-nhap.png) | ![Trang chủ](docs/screenshots/03-trang-chu.png) |
+
+### Các màn chính
+
+| Tổng quan | Học | Chat | Chơi (Game) |
+|:---:|:---:|:---:|:---:|
+| ![Tổng quan](docs/screenshots/04-tong-quan.png) | ![Học](docs/screenshots/05-hoc.png) | ![Chat](docs/screenshots/06-chat.png) | ![Chơi](docs/screenshots/07-choi.png) |
 
 ## 1. Backend
 
@@ -55,6 +70,16 @@ flutter run
 ```powershell
 flutter run --dart-define=GOOGLE_SERVER_CLIENT_ID=xxx.apps.googleusercontent.com
 ```
+
+### Build APK (release)
+
+```powershell
+cd E:\FPT\PRM393\YumeGoJAPP
+.\build-apk.ps1
+# Máy thật: .\build-apk.ps1 -ApiUrl "http://<IP-PC>:5056"
+```
+
+File ra: `YumeGo-Ji-release.apk` (thư mục gốc repo).
 
 ## 3. Thứ tự chạy khi dev
 
