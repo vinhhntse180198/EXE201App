@@ -10,6 +10,20 @@ EXE201App/
 └── README.md
 ```
 
+## Giao diện app (screenshots)
+
+### Đăng nhập & Trang chủ
+
+| Trang chủ (khách) | Đăng nhập | Trang chủ (đã đăng nhập) |
+|:---:|:---:|:---:|
+| ![Trang chủ khách](.github/images/01-trang-chu-khach.png) | ![Đăng nhập](.github/images/02-dang-nhap.png) | ![Trang chủ](.github/images/03-trang-chu.png) |
+
+### Các màn chính
+
+| Tổng quan | Học | Chat | Chơi (Game) |
+|:---:|:---:|:---:|:---:|
+| ![Tổng quan](.github/images/04-tong-quan.png) | ![Học](.github/images/05-hoc.png) | ![Chat](.github/images/06-chat.png) | ![Chơi](.github/images/07-choi.png) |
+
 ## 1. Backend
 
 ### Cấu hình lần đầu
