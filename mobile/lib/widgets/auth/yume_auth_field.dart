@@ -37,6 +37,9 @@ class YumeAuthField extends StatelessWidget {
           obscureText: obscure,
           keyboardType: keyboardType,
           validator: validator,
+          autocorrect: false,
+          enableSuggestions: keyboardType != TextInputType.emailAddress,
+          textInputAction: obscure ? TextInputAction.done : TextInputAction.next,
           decoration: InputDecoration(
             hintText: hint,
             filled: true,

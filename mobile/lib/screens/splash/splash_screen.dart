@@ -1,12 +1,14 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 
 import '../../config/app_flags.dart';
+import '../../config/yume_perf.dart';
 import '../../core/session/app_session.dart';
 import '../../models/auth_response.dart';
 import '../../services/profile_service.dart';
 import '../../utils/post_login_nav.dart';
-import '../../widgets/yume/yume_sakura_background.dart';
 import '../../widgets/navigation/main_shell.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -33,47 +35,45 @@ class _SplashScreenState extends State<SplashScreen> {
     if (!mounted || _navigated) return;
 
     _navigated = true;
-    // Mặc định vào trang chủ (guest mode) như yêu cầu.
     Widget next = const MainShell();
     if (restored != null) {
       AppSession.instance.applyAuth(restored);
-      if (designMode) {
-        next = buildPostLoginScreen(restored);
-      } else {
-        try {
-          final profile = await ProfileService(AppSession.instance.api).fetchMyProfile();
-          final auth = AuthResponse(
-            accessToken: restored.accessToken,
-            user: restored.user.copyWith(isPremium: profile.isPremium),
-            needsPlacementTest: restored.needsPlacementTest,
-          );
-          AppSession.instance.applyAuth(auth);
-          next = buildPostLoginScreen(auth);
-        } catch (_) {
-          await AppSession.instance.auth.logout();
-          AppSession.instance.clear();
-          next = const MainShell();
-        }
+      next = buildPostLoginScreen(restored);
+      if (!designMode) {
+        unawaited(_refreshProfileInBackground(restored));
       }
     }
 
     if (!mounted) return;
-    // Giữ splash tối thiểu để thấy logo.
-    const minSplashMs = 900;
+    final minSplashMs = yumeLiteUi ? 250 : 600;
     final elapsed = DateTime.now().difference(startedAt).inMilliseconds;
     if (elapsed < minSplashMs) {
       await Future<void>.delayed(Duration(milliseconds: minSplashMs - elapsed));
     }
+    if (!mounted) return;
     await Navigator.of(context).pushReplacement(
       MaterialPageRoute<void>(builder: (_) => next),
     );
   }
 
+  Future<void> _refreshProfileInBackground(AuthResponse restored) async {
+    try {
+      final profile = await ProfileService(AppSession.instance.api).fetchMyProfile();
+      AppSession.instance.applyAuth(
+        AuthResponse(
+          accessToken: restored.accessToken,
+          user: restored.user.copyWith(isPremium: profile.isPremium),
+          needsPlacementTest: restored.needsPlacementTest,
+        ),
+      );
+    } catch (_) {}
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: YumeSakuraBackground(
-        child: Container(
+      backgroundColor: const Color(0xFFFFFBFE),
+      body: Container(
           width: double.infinity,
           decoration: const BoxDecoration(
             gradient: LinearGradient(
@@ -124,7 +124,6 @@ class _SplashScreenState extends State<SplashScreen> {
             ],
           ),
         ),
-      ),
     );
   }
 }

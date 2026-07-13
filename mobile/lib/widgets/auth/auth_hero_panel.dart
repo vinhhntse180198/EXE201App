@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../config/yume_decorations.dart';
+import '../../config/yume_perf.dart';
 
 /// Panel trái auth — gradient sakura + copy (mobile: banner trên form).
 class AuthHeroPanel extends StatelessWidget {
@@ -30,11 +31,17 @@ class AuthHeroPanel extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (imageAsset != null) ...[
+          if (imageAsset != null && !yumeLiteUi) ...[
             ClipRRect(
               borderRadius: BorderRadius.circular(14),
-              child: Image.asset(imageAsset!, height: compact ? 100 : 140, width: double.infinity, fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => const SizedBox.shrink()),
+              child: Image.asset(
+                imageAsset!,
+                height: compact ? 100 : 140,
+                width: double.infinity,
+                fit: BoxFit.cover,
+                cacheHeight: 420,
+                errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+              ),
             ),
             const SizedBox(height: 12),
           ],

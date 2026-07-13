@@ -1,11 +1,28 @@
+import 'dart:io';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import 'yume_colors.dart';
+import 'yume_perf.dart';
 
 abstract final class AppTheme {
+  static bool _fontsReady = false;
+
+  /// UI nhẹ hoặc debug Android: bỏ tải font qua mạng.
+  static bool get useBundledSystemFonts =>
+      yumeLiteUi && !kIsWeb && (Platform.isAndroid || Platform.isIOS);
+
+  static void markFontsReady() => _fontsReady = true;
+
   /// Noto Sans: hỗ trợ dấu tiếng Việt + kana/kanji cơ bản trên mọi thiết bị.
-  static TextStyle font(TextStyle? style) => GoogleFonts.notoSans(textStyle: style);
+  static TextStyle font(TextStyle? style) {
+    if (useBundledSystemFonts || !_fontsReady) {
+      return style ?? const TextStyle();
+    }
+    return GoogleFonts.notoSans(textStyle: style);
+  }
 
   static ThemeData light() {
     final base = ThemeData(
@@ -15,13 +32,17 @@ abstract final class AppTheme {
         brightness: Brightness.light,
         surface: YumeColors.surface,
       ),
-      pageTransitionsTheme: const PageTransitionsTheme(
+      pageTransitionsTheme: PageTransitionsTheme(
         builders: {
-          TargetPlatform.android: _YumeSlideFadeTransitionsBuilder(),
-          TargetPlatform.iOS: _YumeSlideFadeTransitionsBuilder(),
-          TargetPlatform.macOS: _YumeSlideFadeTransitionsBuilder(),
-          TargetPlatform.windows: _YumeSlideFadeTransitionsBuilder(),
-          TargetPlatform.linux: _YumeSlideFadeTransitionsBuilder(),
+          TargetPlatform.android: yumeLiteUi
+              ? const FadeUpwardsPageTransitionsBuilder()
+              : const _YumeSlideFadeTransitionsBuilder(),
+          TargetPlatform.iOS: yumeLiteUi
+              ? const CupertinoPageTransitionsBuilder()
+              : const _YumeSlideFadeTransitionsBuilder(),
+          TargetPlatform.macOS: const _YumeSlideFadeTransitionsBuilder(),
+          TargetPlatform.windows: const _YumeSlideFadeTransitionsBuilder(),
+          TargetPlatform.linux: const _YumeSlideFadeTransitionsBuilder(),
         },
       ),
       scaffoldBackgroundColor: YumeColors.surface,
@@ -84,6 +105,10 @@ abstract final class AppTheme {
         textStyle: font(const TextStyle(color: YumeColors.ink, fontSize: 15)),
       ),
     );
+
+    if (useBundledSystemFonts || !_fontsReady) {
+      return base;
+    }
 
     return base.copyWith(
       textTheme: GoogleFonts.notoSansTextTheme(base.textTheme),

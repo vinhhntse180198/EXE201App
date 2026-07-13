@@ -2,6 +2,8 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../../config/yume_perf.dart';
+
 /// Nền Play Hub — khớp web `.phd-glass-layer` + sakura nhẹ.
 class PlayHubBackground extends StatelessWidget {
   const PlayHubBackground({super.key, required this.child});
@@ -10,6 +12,19 @@ class PlayHubBackground extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (yumeLiteUi) {
+      return DecoratedBox(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFFFFF5F8), Color(0xFFF8FAFC)],
+          ),
+        ),
+        child: child,
+      );
+    }
+
     return Stack(
       fit: StackFit.expand,
       children: [

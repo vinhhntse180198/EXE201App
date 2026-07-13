@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 
 import '../../config/yume_colors.dart';
+import '../../config/yume_perf.dart';
 
 /// Nền sakura chấm + gradient — khớp `body` trong `theme.css`.
 class YumeSakuraBackground extends StatelessWidget {
@@ -12,23 +13,32 @@ class YumeSakuraBackground extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (yumeLiteUi) return child;
+
     return Stack(
       fit: StackFit.expand,
       children: [
-        const DecoratedBox(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                Color(0x0FE11D48),
-                Colors.transparent,
-              ],
-              stops: [0, 0.3],
-            ),
+        RepaintBoundary(
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              const DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Color(0x0FE11D48),
+                      Colors.transparent,
+                    ],
+                    stops: [0, 0.3],
+                  ),
+                ),
+              ),
+              CustomPaint(painter: _SakuraDotsPainter()),
+            ],
           ),
         ),
-        CustomPaint(painter: _SakuraDotsPainter()),
         child,
       ],
     );
@@ -77,28 +87,38 @@ class YumeGlassCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    Widget card = ClipRRect(
-      borderRadius: BorderRadius.circular(radius),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
-        child: Container(
-          padding: padding,
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.55),
-            borderRadius: BorderRadius.circular(radius),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.65)),
-            boxShadow: [
-              BoxShadow(
-                color: YumeColors.primary.withValues(alpha: 0.08),
-                blurRadius: 24,
-                offset: const Offset(0, 8),
-              ),
-            ],
-          ),
-          child: child,
+    Widget card = Container(
+      padding: padding,
+      decoration: BoxDecoration(
+        color: yumeLiteUi ? YumeColors.card : Colors.white.withValues(alpha: 0.55),
+        borderRadius: BorderRadius.circular(radius),
+        border: Border.all(
+          color: yumeLiteUi ? YumeColors.border.withValues(alpha: 0.35) : Colors.white.withValues(alpha: 0.65),
         ),
+        boxShadow: yumeLiteUi
+            ? null
+            : [
+                BoxShadow(
+                  color: YumeColors.primary.withValues(alpha: 0.08),
+                  blurRadius: 24,
+                  offset: const Offset(0, 8),
+                ),
+              ],
       ),
+      child: child,
     );
+
+    if (!yumeLiteUi) {
+      card = ClipRRect(
+        borderRadius: BorderRadius.circular(radius),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+          child: card,
+        ),
+      );
+    } else {
+      card = ClipRRect(borderRadius: BorderRadius.circular(radius), child: card);
+    }
     if (margin != null) card = Padding(padding: margin!, child: card);
     if (onTap != null) {
       return Material(

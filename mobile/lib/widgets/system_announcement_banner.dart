@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 
 import '../config/app_flags.dart';
 import '../core/session/app_session.dart';
@@ -19,7 +20,13 @@ class _SystemAnnouncementBannerState extends State<SystemAnnouncementBanner> {
   @override
   void initState() {
     super.initState();
-    if (!designMode) _load();
+    if (!designMode) {
+      SchedulerBinding.instance.addPostFrameCallback((_) {
+        Future<void>.delayed(const Duration(seconds: 2), () {
+          if (mounted) _load();
+        });
+      });
+    }
   }
 
   Future<void> _load() async {

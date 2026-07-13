@@ -13,7 +13,6 @@ import '../../widgets/home/home_hanami_timeline.dart';
 import '../../widgets/home/home_landing_footer.dart';
 import '../../widgets/home/home_landing_hero.dart';
 import '../../widgets/home/home_testimonials_section.dart';
-import '../../widgets/yume/yume_sakura_background.dart';
 import '../../widgets/yume/yume_stat_chip.dart';
 import '../auth/login_screen.dart';
 
@@ -93,10 +92,9 @@ class _HomeScreenState extends State<HomeScreen> {
     final welcome = loggedIn && name.isNotEmpty ? 'Chào $name 👋' : null;
 
     return SizedBox.expand(
-      child: YumeSakuraBackground(
-        child: ColoredBox(
-          color: Colors.white,
-          child: SingleChildScrollView(
+      child: ColoredBox(
+        color: Colors.white,
+        child: SingleChildScrollView(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -142,7 +140,6 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
         ),
-      ),
     );
   }
 }

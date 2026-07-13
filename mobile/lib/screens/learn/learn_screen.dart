@@ -11,6 +11,7 @@ import '../../services/learn_service.dart';
 import '../../services/lesson_service.dart';
 import '../../utils/jlpt_levels.dart';
 import '../../utils/json_field.dart';
+import '../../config/yume_perf.dart';
 import '../../widgets/common/error_view.dart';
 import '../../widgets/common/loading_view.dart';
 import '../../widgets/learn/learn_ai_promo.dart';
@@ -52,9 +53,9 @@ class _LearnScreenState extends State<LearnScreen> {
     try {
       final results = await Future.wait([
         _learn.fetchProgressSummary(),
-        _lessons.fetchLessons(pageSize: 200),
-        _learn.fetchMyProgress(pageSize: 200),
-        _learn.fetchBookmarks(pageSize: 50),
+        _lessons.fetchLessons(pageSize: 50),
+        _learn.fetchMyProgress(pageSize: 50),
+        _learn.fetchBookmarks(pageSize: 30),
       ]);
       final completed = _learn.completedLessonIds(results[2] as List<dynamic>);
       final lessons = (results[1] as List<LessonItem>)
@@ -141,39 +142,14 @@ class _LearnScreenState extends State<LearnScreen> {
 
     return LearnWithAi(
       child: SizedBox.expand(
-        child: YumeSakuraBackground(
-          child: DecoratedBox(
-            decoration: const BoxDecoration(gradient: YumeDecorations.dashboardGradient),
-            child: SafeArea(
-              child: lessons.isEmpty && !designMode
-                  ? _buildHeader(summary, allLessons, completedCount, totalPublished)
-                  : ListView(
-                      padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
-                      children: [
-                        ..._buildHeaderChildren(summary, allLessons, completedCount, totalPublished),
-                        if (lessons.isEmpty)
-                          const Padding(
-                            padding: EdgeInsets.symmetric(vertical: 32),
-                            child: Center(
-                              child: Text('Chưa có bài học cho level này.', style: TextStyle(color: YumeColors.muted)),
-                            ),
-                          )
-                        else
-                          for (final levelId in levelOrder) ...[
-                            _LevelSectionHeader(
-                              levelCode: levelCodeFromId(levelId),
-                              stats: _levelStats(levelId, summary),
-                              lessonCount: grouped[levelId]!.length,
-                              completedInSection: grouped[levelId]!.where((l) => l.isCompleted).length,
-                            ),
-                            ...grouped[levelId]!.map((l) => _LessonCard(lesson: l, onTap: () => _openLesson(l))),
-                            const SizedBox(height: 12),
-                          ],
-                        const SizedBox(height: 72),
-                      ],
-                    ),
-            ),
-          ),
+        child: _LearnBody(
+          useLiteBackground: yumeLiteUi,
+          lessons: lessons,
+          levelOrder: levelOrder,
+          grouped: grouped,
+          headerChildren: _buildHeaderChildren(summary, allLessons, completedCount, totalPublished),
+          onOpenLesson: _openLesson,
+          levelStats: (id) => _levelStats(id, summary),
         ),
       ),
     );
@@ -281,20 +257,100 @@ class _LearnScreenState extends State<LearnScreen> {
       const SizedBox(height: 16),
     ];
   }
+}
 
-  Widget _buildHeader(
-    ProgressSummary summary,
-    List<LessonItem> allLessons,
-    int completedCount,
-    int totalPublished,
-  ) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: _buildHeaderChildren(summary, allLessons, completedCount, totalPublished),
-      ),
+class _LearnBody extends StatelessWidget {
+  const _LearnBody({
+    required this.useLiteBackground,
+    required this.lessons,
+    required this.levelOrder,
+    required this.grouped,
+    required this.headerChildren,
+    required this.onOpenLesson,
+    required this.levelStats,
+  });
+
+  final bool useLiteBackground;
+  final List<LessonItem> lessons;
+  final List<int> levelOrder;
+  final Map<int, List<LessonItem>> grouped;
+  final List<Widget> headerChildren;
+  final void Function(LessonItem) onOpenLesson;
+  final LevelCompletion? Function(int) levelStats;
+
+  int get _lazyItemCount {
+    var count = 0;
+    for (final levelId in levelOrder) {
+      count += 1 + grouped[levelId]!.length;
+    }
+    return count;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scroll = CustomScrollView(
+      slivers: [
+        SliverPadding(
+          padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+          sliver: SliverList(delegate: SliverChildListDelegate(headerChildren)),
+        ),
+        if (lessons.isEmpty)
+          const SliverPadding(
+            padding: EdgeInsets.symmetric(vertical: 32, horizontal: 20),
+            sliver: SliverToBoxAdapter(
+              child: Center(child: Text('Chưa có bài học cho level này.', style: TextStyle(color: YumeColors.muted))),
+            ),
+          )
+        else
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+            sliver: SliverList(
+              delegate: SliverChildBuilderDelegate(
+                (context, index) {
+                  if (index == _lazyItemCount) return const SizedBox(height: 72);
+                  return _lazyItemAt(index);
+                },
+                childCount: _lazyItemCount + 1,
+              ),
+            ),
+          ),
+      ],
     );
+
+    final body = SafeArea(child: scroll);
+    final decorated = DecoratedBox(
+      decoration: const BoxDecoration(gradient: YumeDecorations.dashboardGradient),
+      child: body,
+    );
+
+    if (useLiteBackground) return decorated;
+    return YumeSakuraBackground(child: decorated);
+  }
+
+  Widget _lazyItemAt(int index) {
+    var cursor = 0;
+    for (final levelId in levelOrder) {
+      if (cursor == index) {
+        final section = grouped[levelId]!;
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 10, top: 4),
+          child: _LevelSectionHeader(
+            levelCode: levelCodeFromId(levelId),
+            stats: levelStats(levelId),
+            lessonCount: section.length,
+            completedInSection: section.where((l) => l.isCompleted).length,
+          ),
+        );
+      }
+      cursor++;
+      for (final lesson in grouped[levelId]!) {
+        if (cursor == index) {
+          return _LessonCard(lesson: lesson, onTap: () => onOpenLesson(lesson));
+        }
+        cursor++;
+      }
+    }
+    return const SizedBox.shrink();
   }
 }
 

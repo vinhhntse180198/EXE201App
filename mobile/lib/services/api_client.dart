@@ -16,9 +16,12 @@ class ApiException implements Exception {
 }
 
 class ApiClient {
-  ApiClient({http.Client? client}) : _client = client ?? http.Client();
+  ApiClient({http.Client? client, Duration? timeout})
+      : _client = client ?? http.Client(),
+        _timeout = timeout ?? const Duration(seconds: 8);
 
   final http.Client _client;
+  final Duration _timeout;
   String? _token;
 
   void setToken(String? token) => _token = token;
@@ -41,39 +44,49 @@ class ApiClient {
   }
 
   Future<dynamic> get(String path, {Map<String, String>? query}) async {
-    final response = await _client.get(_uri(path, query), headers: _headers(jsonBody: false));
+    final response = await _client
+        .get(_uri(path, query), headers: _headers(jsonBody: false))
+        .timeout(_timeout);
     return _parseResponse(response);
   }
 
   Future<dynamic> post(String path, {Map<String, dynamic>? body}) async {
-    final response = await _client.post(
-      _uri(path),
-      headers: _headers(),
-      body: body == null ? null : jsonEncode(body),
-    );
+    final response = await _client
+        .post(
+          _uri(path),
+          headers: _headers(),
+          body: body == null ? null : jsonEncode(body),
+        )
+        .timeout(_timeout);
     return _parseResponse(response);
   }
 
   Future<dynamic> put(String path, {Map<String, dynamic>? body}) async {
-    final response = await _client.put(
-      _uri(path),
-      headers: _headers(),
-      body: body == null ? null : jsonEncode(body),
-    );
+    final response = await _client
+        .put(
+          _uri(path),
+          headers: _headers(),
+          body: body == null ? null : jsonEncode(body),
+        )
+        .timeout(_timeout);
     return _parseResponse(response);
   }
 
   Future<dynamic> patch(String path, {Map<String, dynamic>? body}) async {
-    final response = await _client.patch(
-      _uri(path),
-      headers: _headers(),
-      body: body == null ? null : jsonEncode(body),
-    );
+    final response = await _client
+        .patch(
+          _uri(path),
+          headers: _headers(),
+          body: body == null ? null : jsonEncode(body),
+        )
+        .timeout(_timeout);
     return _parseResponse(response);
   }
 
   Future<dynamic> delete(String path) async {
-    final response = await _client.delete(_uri(path), headers: _headers(jsonBody: false));
+    final response = await _client
+        .delete(_uri(path), headers: _headers(jsonBody: false))
+        .timeout(_timeout);
     return _parseResponse(response);
   }
 
@@ -96,8 +109,8 @@ class ApiClient {
       contentType: _mimeFromFilename(filename),
     ));
     fields?.forEach((k, v) => request.fields[k] = v);
-    final streamed = await _client.send(request);
-    final response = await http.Response.fromStream(streamed);
+    final streamed = await _client.send(request).timeout(_timeout);
+    final response = await http.Response.fromStream(streamed).timeout(_timeout);
     return _parseResponse(response);
   }
 

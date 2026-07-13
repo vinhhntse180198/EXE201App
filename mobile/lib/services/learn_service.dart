@@ -7,9 +7,26 @@ class LearnService {
 
   final ApiClient _api;
 
-  Future<ProgressSummary> fetchProgressSummary() async {
+  static ProgressSummary? _cachedSummary;
+  static DateTime? _summaryCachedAt;
+  static const _summaryTtl = Duration(seconds: 90);
+
+  static void invalidateProgressCache() {
+    _cachedSummary = null;
+    _summaryCachedAt = null;
+  }
+
+  Future<ProgressSummary> fetchProgressSummary({bool forceRefresh = false}) async {
+    if (!forceRefresh && _cachedSummary != null && _summaryCachedAt != null) {
+      if (DateTime.now().difference(_summaryCachedAt!) < _summaryTtl) {
+        return _cachedSummary!;
+      }
+    }
     final data = await _api.get('/api/users/me/progress/summary');
-    return ProgressSummary.fromJson(data as Map<String, dynamic>);
+    final summary = ProgressSummary.fromJson(data as Map<String, dynamic>);
+    _cachedSummary = summary;
+    _summaryCachedAt = DateTime.now();
+    return summary;
   }
 
   Future<List<dynamic>> fetchMyProgress({String? status, int pageSize = 20}) async {
@@ -37,6 +54,7 @@ class LearnService {
       '/api/lessons/$lessonId/progress',
       body: {'progressPercent': 100, 'status': 'completed'},
     );
+    invalidateProgressCache();
   }
 
   Set<int> completedLessonIds(List<dynamic> progressItems) {

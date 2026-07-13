@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../config/app_flags.dart';
 import '../../config/yume_colors.dart';
+import '../../config/yume_perf.dart';
 import '../../core/mock/mock_data.dart';
 import '../../core/session/app_session.dart';
 import '../../models/chat_room.dart';
@@ -29,6 +32,8 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
   final _chat = ChatService(AppSession.instance.api);
   final _social = SocialService(AppSession.instance.api);
   final _hub = ChatHubService();
+  final _searchController = TextEditingController();
+  Timer? _searchDebounce;
 
   List<FriendUser> _friends = [];
   List<ChatRoom> _myRooms = [];
@@ -69,6 +74,7 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
   @override
   void initState() {
     super.initState();
+    _tabs.addListener(_onTabChanged);
     if (designMode) {
       _friends = MockData.chatFriends;
       _myRooms = MockData.chatRooms;
@@ -78,11 +84,32 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
     }
   }
 
+  void _onTabChanged() {
+    if (!_tabs.indexIsChanging && mounted) {
+      setState(() {});
+    }
+  }
+
   @override
   void dispose() {
+    _searchDebounce?.cancel();
+    _searchController.dispose();
+    _tabs.removeListener(_onTabChanged);
     _tabs.dispose();
     _hub.disconnect();
     super.dispose();
+  }
+
+  Future<void> _ensureHubConnected() async {
+    if (designMode || _hub.isConnected) return;
+    final token = AppSession.instance.user?.accessToken ?? '';
+    if (token.isEmpty) return;
+    await _hub.connect(
+      accessToken: token,
+      onStatus: (s) {
+        if (mounted) setState(() => _hubStatus = s);
+      },
+    );
   }
 
   Future<void> _load() async {
@@ -91,15 +118,6 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
       _error = null;
     });
     try {
-      final token = AppSession.instance.user?.accessToken ?? '';
-      if (token.isNotEmpty && !_hub.isConnected) {
-        await _hub.connect(
-          accessToken: token,
-          onStatus: (s) {
-            if (mounted) setState(() => _hubStatus = s);
-          },
-        );
-      }
       final myLevel = AppSession.instance.user?.user.levelId;
       final results = await Future.wait([
         _social.fetchFriends(),
@@ -146,7 +164,10 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
         await _chat.joinRoom(room.id);
       } catch (_) {}
     }
-    if (!designMode) await _hub.joinRoom(room.id);
+    if (!designMode) {
+      await _ensureHubConnected();
+      await _hub.joinRoom(room.id);
+    }
     if (!mounted) return;
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
@@ -226,58 +247,21 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(20),
-                  child: Stack(
-                    children: [
-                      Image.asset(
-                        'assets/images/hero-japan.png',
-                        height: 120,
-                        width: double.infinity,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => Container(
-                          height: 120,
-                          color: YumeColors.pinkLight,
-                        ),
-                      ),
-                      Positioned.fill(
-                        child: DecoratedBox(
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              begin: Alignment.bottomCenter,
-                              end: Alignment.topCenter,
-                              colors: [Colors.black.withValues(alpha: 0.55), Colors.transparent],
-                            ),
-                          ),
-                        ),
-                      ),
-                      Positioned(
-                        left: 16,
-                        bottom: 14,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'Chat Moji',
-                              style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: Colors.white),
-                            ),
-                            if (!designMode && _hubStatus.isNotEmpty)
-                              Text(_hubStatus, style: const TextStyle(fontSize: 10, color: Colors.white70)),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
+                  child: yumeLiteUi ? _chatHeroLite() : _chatHeroFull(),
                 ),
               ),
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
                 child: TextField(
-                  onChanged: (v) => setState(() => _query = v),
+                  controller: _searchController,
+                  onChanged: (v) {
+                    _searchDebounce?.cancel();
+                    _searchDebounce = Timer(const Duration(milliseconds: 280), () {
+                      if (mounted) setState(() => _query = v.trim());
+                    });
+                  },
                   decoration: InputDecoration(
-                    hintText: _tabs.index == 0
-                        ? 'Tìm bạn bè hoặc nhóm...'
-                        : _tabs.index == 2
-                            ? 'Tìm phòng $_myLevelCode...'
-                            : 'Tìm phòng chat...',
+                    hintText: _searchHint,
                     prefixIcon: const Icon(Icons.search, color: YumeColors.muted),
                     filled: true,
                     fillColor: YumeColors.card,
@@ -290,7 +274,6 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
                 child: TabBar(
                   controller: _tabs,
                   labelColor: YumeColors.primary,
-                  onTap: (_) => setState(() {}),
                   tabs: const [
                     Tab(text: 'Của tôi'),
                     Tab(text: 'Công khai'),
@@ -301,6 +284,7 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
               Expanded(
                 child: TabBarView(
                   controller: _tabs,
+                  physics: yumeLiteUi ? const NeverScrollableScrollPhysics() : null,
                   children: [
                     _mineTab(),
                     _roomList(_filterRooms(_publicRooms), joinFirst: true),
@@ -312,6 +296,73 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
           ),
         ),
       ),
+    );
+  }
+
+  String get _searchHint {
+    return switch (_tabs.index) {
+      0 => 'Tìm bạn bè hoặc nhóm...',
+      2 => 'Tìm phòng $_myLevelCode...',
+      _ => 'Tìm phòng chat...',
+    };
+  }
+
+  Widget _chatHeroLite() {
+    return Container(
+      height: 88,
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [YumeColors.primary, YumeColors.primary.withValues(alpha: 0.82)],
+        ),
+      ),
+      alignment: Alignment.bottomLeft,
+      child: const Text(
+        'Chat Moji',
+        style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: Colors.white),
+      ),
+    );
+  }
+
+  Widget _chatHeroFull() {
+    return Stack(
+      children: [
+        Image.asset(
+          'assets/images/hero-japan.png',
+          height: 120,
+          width: double.infinity,
+          fit: BoxFit.cover,
+          cacheHeight: 360,
+          errorBuilder: (_, __, ___) => Container(height: 120, color: YumeColors.pinkLight),
+        ),
+        Positioned.fill(
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.bottomCenter,
+                end: Alignment.topCenter,
+                colors: [Colors.black.withValues(alpha: 0.55), Colors.transparent],
+              ),
+            ),
+          ),
+        ),
+        Positioned(
+          left: 16,
+          bottom: 14,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Chat Moji',
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: Colors.white),
+              ),
+              if (!designMode && _hubStatus.isNotEmpty)
+                Text(_hubStatus, style: const TextStyle(fontSize: 10, color: Colors.white70)),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
